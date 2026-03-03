@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}Register - Smart Classroom{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="card-title text-center mb-4">
+                    <i class="bi bi-person-plus me-2"></i>Create Account
+                </h3>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-circle me-2"></i>
+                        Please correct the errors below.
+                        <ul class="mb-0 mt-2">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li>{{ field.label }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                            {{ form.first_name }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                            {{ form.last_name }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.username.id_for_label }}" class="form-label">Username *</label>
+                        {{ form.username }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">Email *</label>
+                        {{ form.email }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.role.id_for_label }}" class="form-label">Role *</label>
+                        {{ form.role }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.department.id_for_label }}" class="form-label">Department</label>
+                        {{ form.department }}
+                    </div>
+
+                    <!-- Conditional fields shown/hidden by JS -->
+                    <div class="mb-3" id="enrollment-field" style="display:none;">
+                        <label for="{{ form.enrollment_no.id_for_label }}" class="form-label">Enrollment Number *</label>
+                        {{ form.enrollment_no }}
+                    </div>
+
+                    <div class="mb-3" id="faculty-id-field" style="display:none;">
+                        <label for="{{ form.faculty_id.id_for_label }}" class="form-label">Faculty ID *</label>
+                        {{ form.faculty_id }}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.phone.id_for_label }}" class="form-label">Phone</label>
+                        {{ form.phone }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.password1.id_for_label }}" class="form-label">Password *</label>
+                            {{ form.password1 }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.password2.id_for_label }}" class="form-label">Confirm Password *</label>
+                            {{ form.password2 }}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Create Account</button>
+                </form>
+
+                <hr>
+                <p class="text-center text-muted mb-0">
+                    Already have an account? <a href="{% url 'login' %}">Login here</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Show/hide role-specific fields
+    const roleSelect = document.getElementById('id_role');
+    const enrollmentField = document.getElementById('enrollment-field');
+    const facultyIdField = document.getElementById('faculty-id-field');
+
+    function toggleRoleFields() {
+        const role = roleSelect.value;
+        enrollmentField.style.display = role === 'student' ? 'block' : 'none';
+        facultyIdField.style.display = role === 'faculty' ? 'block' : 'none';
+    }
+
+    roleSelect.addEventListener('change', toggleRoleFields);
+    toggleRoleFields();  // Run on page load
+</script>
+{% endblock %}
