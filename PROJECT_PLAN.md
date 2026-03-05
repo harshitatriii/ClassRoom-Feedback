@@ -9,17 +9,17 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Browser)                       │
+│                   FRONTEND (React SPA)                          │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────────────────┐ │
 │  │ Student   │  │ Faculty      │  │ Admin Dashboard           │ │
 │  │ Feedback  │  │ View Reports │  │ Analytics + Trends +      │ │
 │  │ Forms     │  │ + Sentiment  │  │ Sentiment Scores + Charts │ │
 │  └──────────┘  └──────────────┘  └───────────────────────────┘ │
-│         HTML/CSS/JS + Chart.js/Plotly                           │
+│         React + Tailwind CSS + Recharts                         │
 └────────────────────────┬────────────────────────────────────────┘
-                         │ HTTP (Django Templates / REST API)
+                         │ REST API (Token Auth)
 ┌────────────────────────▼────────────────────────────────────────┐
-│                    BACKEND (Django)                              │
+│               BACKEND (Django + DRF API)                        │
 │  ┌────────────┐ ┌─────────────┐ ┌────────────────────────────┐ │
 │  │ Auth &     │ │ Feedback    │ │ Analytics & Reporting      │ │
 │  │ Role Mgmt  │ │ Collection  │ │ Module                     │ │
@@ -30,8 +30,7 @@
 │                        │                                        │
 │              ┌─────────▼─────────┐                              │
 │              │ AI/NLP Engine     │                              │
-│              │ (TextBlob/NLTK/   │                              │
-│              │  HuggingFace)     │                              │
+│              │ (TextBlob/NLTK)   │                              │
 │              │ - Sentiment Score │                              │
 │              │ - Keyword Extract │                              │
 │              │ - Topic Classify  │                              │
@@ -39,10 +38,10 @@
 └────────────────────────┬────────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────────┐
-│                    DATABASE (MongoDB)                            │
+│                    DATABASE (SQLite / PostgreSQL)                │
 │  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌──────────────────┐ │
 │  │ Users    │ │ Feedback  │ │ Courses  │ │ Sentiment        │ │
-│  │Collection│ │Collection │ │Collection│ │Results Collection│ │
+│  │  Table   │ │  Table    │ │  Table   │ │ Results Table    │ │
 │  └──────────┘ └───────────┘ └──────────┘ └──────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -52,65 +51,63 @@
 | Module               | Responsibility                                             |
 |----------------------|------------------------------------------------------------|
 | **Auth Module**      | Registration, login, role-based access (Student/Faculty/Admin) |
-| **Feedback Module**  | Submit, view, edit feedback (structured + free-text)        |
+| **Feedback Module**  | Submit, view feedback (structured + free-text)             |
 | **NLP/AI Module**    | Sentiment analysis, keyword extraction, topic classification |
 | **Analytics Module** | Aggregate scores, trend charts, comparative reports         |
-| **Dashboard Module** | Role-specific views, charts (Chart.js/Plotly), export       |
+| **Dashboard Module** | Role-specific views, charts (Recharts), analytics          |
 | **Admin Module**     | User management, course/subject CRUD, system config         |
 
 ### 1.3 Data Flow
 
 ```
-Student submits feedback
+Student submits feedback (React form → POST /api/feedback/)
         │
         ▼
   Feedback stored in DB (raw)
         │
         ▼
-  NLP Engine processes text
+  NLP Engine processes text (post_save signal)
   ├── Sentiment score (positive/neutral/negative + polarity)
   ├── Keyword extraction (top topics mentioned)
-  └── Category tagging (teaching/content/engagement/infrastructure)
+  └── Category tagging (teaching/content/engagement)
         │
         ▼
-  Results stored in DB (processed)
+  Results stored in DB (SentimentResult)
         │
         ▼
-  Dashboard aggregates & visualizes
+  Dashboard aggregates & visualizes (GET /api/analysis/*)
   ├── Faculty sees: own course sentiment trends
   ├── Admin sees: department-wide analytics, comparisons
-  └── Student sees: confirmation + anonymous aggregate
+  └── Student sees: own feedback history + sentiment
 ```
 
 ---
 
 ## 2. TECHNOLOGY DECISIONS
 
-| Layer         | Choice              | Rationale                                    |
-|---------------|---------------------|----------------------------------------------|
-| Backend       | Django 4.x          | Robust, built-in auth, admin panel, ORM      |
-| Database      | MongoDB (djongo)    | Flexible schema for varied feedback formats   |
-| NLP - Basic   | TextBlob            | Simple, fast sentiment for MVP                |
-| NLP - Advanced| NLTK + HuggingFace  | Better accuracy for later phases              |
-| Frontend      | Django Templates    | Server-rendered, simpler than SPA for MVP     |
-| Charts        | Chart.js + Plotly   | Interactive, publication-quality charts        |
-| CSS Framework | Bootstrap 5         | Responsive, fast to build professional UI     |
-
-**Note on MongoDB**: Since Django's native ORM doesn't support MongoDB directly, we have two practical options:
-- **Option A (Recommended for simplicity)**: Use **SQLite/PostgreSQL** with Django ORM for the MVP, switch to MongoDB later if needed.
-- **Option B**: Use **djongo** or **pymongo** directly for MongoDB integration.
-
-The plan below assumes **Option A** (SQLite for dev, PostgreSQL for production) for faster development, but the models are designed to be easily migrated.
+| Layer         | Choice                      | Rationale                                    |
+|---------------|-----------------------------|----------------------------------------------|
+| Backend       | Django 5.2 + DRF            | Robust ORM, built-in admin, REST API support |
+| API           | Django REST Framework       | Token auth, serializers, viewsets, permissions|
+| Database      | SQLite (dev) / PostgreSQL   | Django ORM, simple for dev, scalable for prod|
+| NLP - Basic   | TextBlob                    | Simple, fast sentiment for MVP               |
+| NLP - Advanced| NLTK + HuggingFace          | Better accuracy for later phases             |
+| Frontend      | React (Vite)                | Modern SPA, component-based, fast dev cycle  |
+| Charts        | Recharts                    | React-native charting, declarative JSX       |
+| CSS Framework | Tailwind CSS                | Utility-first, rapid UI development          |
+| Auth          | DRF Token Authentication    | Simple, server-side token, easy revocation   |
+| CORS          | django-cors-headers         | Required for React dev server communication  |
 
 ---
 
-## 3. PROJECT STRUCTURE (Target)
+## 3. PROJECT STRUCTURE
 
 ```
 ClassRoom-Feedback/
-├── smartClassroom/                  # Django project root
+├── smartClassroom/                  # Django project root (API backend)
 │   ├── manage.py
 │   ├── requirements.txt
+│   ├── db.sqlite3
 │   ├── smartClassroom/              # Project settings
 │   │   ├── settings.py
 │   │   ├── urls.py
@@ -119,67 +116,67 @@ ClassRoom-Feedback/
 │   │
 │   ├── accounts/                    # App: Authentication & User Management
 │   │   ├── models.py               # CustomUser (Student/Faculty/Admin roles)
-│   │   ├── views.py                # Login, Register, Profile
-│   │   ├── forms.py                # Registration/Login forms
-│   │   ├── urls.py
-│   │   ├── decorators.py           # Role-based access decorators
-│   │   └── templates/accounts/
-│   │       ├── login.html
-│   │       ├── register.html
-│   │       └── profile.html
+│   │   ├── serializers.py          # User registration/login/profile serializers
+│   │   ├── api_views.py            # DRF API views (register, login, logout, profile)
+│   │   ├── api_urls.py             # API URL routes
+│   │   ├── permissions.py          # DRF role-based permission classes
+│   │   ├── decorators.py           # Role-based access decorators (legacy)
+│   │   └── admin.py
 │   │
-│   ├── courses/                     # App: Course & Subject Management
-│   │   ├── models.py               # Course, Subject, Enrollment
-│   │   ├── views.py                # CRUD for courses
-│   │   ├── urls.py
-│   │   └── templates/courses/
-│   │       ├── course_list.html
-│   │       └── course_detail.html
+│   ├── courses/                     # App: Course Management
+│   │   ├── models.py               # Course model
+│   │   ├── serializers.py          # Course serializers
+│   │   ├── views.py                # CourseViewSet (CRUD)
+│   │   ├── urls.py                 # DRF router URLs
+│   │   └── admin.py
 │   │
 │   ├── feedback/                    # App: Feedback Collection
-│   │   ├── models.py               # Feedback, FeedbackQuestion
-│   │   ├── views.py                # Submit, List, Detail
-│   │   ├── forms.py                # Feedback submission forms
-│   │   ├── urls.py
-│   │   └── templates/feedback/
-│   │       ├── submit.html
-│   │       ├── my_feedback.html
-│   │       └── feedback_detail.html
+│   │   ├── models.py               # Feedback model
+│   │   ├── serializers.py          # Feedback serializers
+│   │   ├── views.py                # FeedbackViewSet
+│   │   ├── urls.py                 # DRF router URLs
+│   │   ├── signals.py              # Auto-trigger sentiment analysis
+│   │   └── admin.py
 │   │
 │   ├── analysis/                    # App: NLP/AI Sentiment Engine
-│   │   ├── sentiment.py            # TextBlob/NLTK sentiment analysis
-│   │   ├── keywords.py             # Keyword/topic extraction
-│   │   ├── models.py               # SentimentResult, AnalysisCache
-│   │   ├── tasks.py                # Background processing (optional)
-│   │   └── utils.py                # Text preprocessing utilities
-│   │
-│   ├── dashboard/                   # App: Analytics Dashboard
-│   │   ├── views.py                # Dashboard views per role
+│   │   ├── sentiment.py            # TextBlob sentiment analysis
+│   │   ├── models.py               # SentimentResult model
+│   │   ├── serializers.py          # SentimentResult serializer
+│   │   ├── views.py                # Analytics API views
 │   │   ├── urls.py
-│   │   ├── charts.py               # Chart data preparation
-│   │   └── templates/dashboard/
-│   │       ├── student_dashboard.html
-│   │       ├── faculty_dashboard.html
-│   │       └── admin_dashboard.html
+│   │   └── admin.py
 │   │
-│   ├── static/                      # Static assets
-│   │   ├── css/
-│   │   │   └── style.css
-│   │   ├── js/
-│   │   │   ├── charts.js
-│   │   │   └── feedback.js
-│   │   └── images/
-│   │
-│   └── templates/                   # Global templates
-│       ├── base.html                # Base layout with navbar
-│       ├── home.html
-│       └── components/
-│           ├── navbar.html
-│           └── footer.html
+│   └── core/                        # Core app (minimal)
+│       └── models.py
 │
-├── PROJECT_PLAN.md                  # This file
-├── venv/                            # Virtual environment
-└── .gitignore
+├── frontend/                        # React SPA (Vite)
+│   ├── package.json
+│   ├── vite.config.js               # Dev proxy to Django API
+│   └── src/
+│       ├── api/                     # API client modules
+│       │   ├── client.js            # Axios + token interceptor
+│       │   ├── auth.js
+│       │   ├── courses.js
+│       │   ├── feedback.js
+│       │   └── dashboard.js
+│       ├── context/
+│       │   └── AuthContext.jsx       # Auth state management
+│       ├── hooks/
+│       │   └── useAuth.js
+│       ├── components/
+│       │   ├── layout/              # AppLayout, Sidebar, TopBar
+│       │   ├── ui/                  # ProtectedRoute, RoleRoute, StarRating, StatCard
+│       │   └── charts/             # SentimentPieChart, RatingBarChart, TrendLineChart, KeywordCloud
+│       └── pages/
+│           ├── auth/                # LoginPage, RegisterPage
+│           ├── student/             # StudentDashboard, FeedbackForm, FeedbackHistory
+│           ├── faculty/             # FacultyDashboard, CourseAnalytics
+│           ├── admin/               # AdminDashboard, CourseManagement, CourseForm
+│           └── shared/              # CourseList, CourseDetail, FeedbackDetail, ProfilePage
+│
+├── PROJECT_PLAN.md
+├── .gitignore
+└── .gitattributes
 ```
 
 ---
@@ -197,32 +194,36 @@ ClassRoom-Feedback/
 | department    | CharField  | Optional                        |
 | enrollment_no | CharField  | For students only               |
 | faculty_id    | CharField  | For faculty only                |
+| phone         | CharField  | Optional                        |
 
 ### Course
-| Field       | Type        | Notes                    |
-|-------------|-------------|--------------------------|
-| id          | AutoField   | PK                       |
-| name        | CharField   |                          |
-| code        | CharField   | Unique (e.g., CS401)     |
-| department  | CharField   |                          |
-| semester    | IntegerField|                          |
-| faculty     | ForeignKey  | -> CustomUser (faculty)  |
-| academic_year| CharField  | e.g., 2025-26            |
-| is_active   | BooleanField| Default True             |
+| Field        | Type        | Notes                    |
+|--------------|-------------|--------------------------|
+| id           | AutoField   | PK                       |
+| name         | CharField   |                          |
+| code         | CharField   | Unique (e.g., CS401)     |
+| department   | CharField   |                          |
+| semester     | IntegerField|                          |
+| faculty      | ForeignKey  | -> CustomUser (faculty)  |
+| academic_year| CharField   | e.g., 2025-26            |
+| is_active    | BooleanField| Default True             |
+| created_at   | DateTimeField| Auto                    |
+| updated_at   | DateTimeField| Auto                    |
 
 ### Feedback
-| Field           | Type         | Notes                              |
-|-----------------|--------------|------------------------------------|
-| id              | AutoField    | PK                                 |
-| student         | ForeignKey   | -> CustomUser (anonymous optional) |
-| course          | ForeignKey   | -> Course                          |
-| rating_teaching | IntegerField | 1-5 Likert scale                   |
-| rating_content  | IntegerField | 1-5                                |
-| rating_engagement| IntegerField| 1-5                                |
-| rating_overall  | IntegerField | 1-5                                |
-| text_feedback   | TextField    | Free-text (for NLP analysis)       |
-| is_anonymous    | BooleanField | Default True                       |
-| created_at      | DateTimeField| Auto                               |
+| Field            | Type         | Notes                              |
+|------------------|--------------|------------------------------------|
+| id               | AutoField    | PK                                 |
+| student          | ForeignKey   | -> CustomUser (anonymous optional) |
+| course           | ForeignKey   | -> Course                          |
+| rating_teaching  | IntegerField | 1-5 Likert scale                   |
+| rating_content   | IntegerField | 1-5                                |
+| rating_engagement| IntegerField | 1-5                                |
+| rating_overall   | IntegerField | 1-5                                |
+| text_feedback    | TextField    | Free-text (for NLP analysis)       |
+| is_anonymous     | BooleanField | Default True                       |
+| created_at       | DateTimeField| Auto                               |
+| *unique_together*| -            | (student, course)                  |
 
 ### SentimentResult
 | Field           | Type         | Notes                              |
@@ -240,79 +241,74 @@ ClassRoom-Feedback/
 
 ## 5. PHASED DEVELOPMENT PLAN
 
-### PHASE 1: Foundation & Auth (Week 1-2)
+### PHASE 1: Foundation & Auth (Week 1-2) --- COMPLETED
 **Goal**: Project setup, user authentication, role-based access
 
 Tasks:
 - [x] Initialize Django project and `core` app
-- [ ] Set up `requirements.txt` with dependencies
-- [ ] Create `accounts` app with CustomUser model (Student/Faculty/Admin roles)
-- [ ] Implement registration and login views with role selection
-- [ ] Create role-based access decorators (`@student_required`, `@faculty_required`, `@admin_required`)
-- [ ] Build base template (`base.html`) with Bootstrap 5 navbar
-- [ ] Create home/landing page
-- [ ] Set up static files structure (CSS/JS)
-- [ ] Write initial migrations and test user creation
+- [x] Set up `requirements.txt` with dependencies
+- [x] Create `accounts` app with CustomUser model (Student/Faculty/Admin roles)
+- [x] Implement registration and login with role selection
+- [x] Create role-based access decorators
+- [x] Build base UI layout
+- [x] Create home/landing page
+- [x] Set up static files structure
+- [x] Write initial migrations and test user creation
 
-**Deliverables**: Working auth system with 3 user roles, base UI layout
+**Deliverables**: Working auth system with 3 user roles
 
 ---
 
-### PHASE 2: Course Management & Feedback Submission (Week 3-4)
-**Goal**: Course CRUD and feedback collection forms
+### PHASE 2: Architecture Migration + Course & Feedback (Week 3-4) --- COMPLETED
+**Goal**: Migrate to DRF + React, implement course management and feedback
 
 Tasks:
-- [ ] Create `courses` app with Course model
-- [ ] Admin can create/edit/delete courses and assign faculty
-- [ ] Students can view enrolled courses
-- [ ] Create `feedback` app with Feedback model
-- [ ] Build feedback submission form (Likert ratings + free-text)
-- [ ] Enforce one feedback per student per course per period
-- [ ] Students can view their submitted feedback history
-- [ ] Faculty can see feedback count (not content yet)
-- [ ] Add form validation and success/error messages
+- [x] Configure Django REST Framework with Token Authentication
+- [x] Set up CORS for React dev server
+- [x] Create DRF permission classes (IsStudent, IsFaculty, IsAdminUser, IsFacultyOrAdmin)
+- [x] Build auth API endpoints (register, login, logout, profile)
+- [x] Create `courses` app with Course model and CourseViewSet (CRUD)
+- [x] Create `feedback` app with Feedback model and FeedbackViewSet
+- [x] Enforce one feedback per student per course (unique_together)
+- [x] Build React frontend with Vite + Tailwind CSS
+- [x] Implement auth flow (login, register, token persistence)
+- [x] Create role-based routing (ProtectedRoute, RoleRoute)
+- [x] Build feedback submission form with star ratings
+- [x] Build feedback history page
 
-**Deliverables**: Students can submit structured + text feedback for courses
+**Deliverables**: Full DRF API backend + React SPA with auth, courses, feedback
 
 ---
 
-### PHASE 3: AI/NLP Sentiment Analysis Engine (Week 5-6)
+### PHASE 3: AI/NLP Sentiment Analysis Engine (Week 5-6) --- COMPLETED
 **Goal**: Analyze text feedback using NLP
 
 Tasks:
-- [ ] Create `analysis` app
-- [ ] Implement text preprocessing (lowercase, stopword removal, cleaning)
-- [ ] Integrate TextBlob for sentiment polarity & subjectivity scoring
-- [ ] Implement sentiment classification (positive/neutral/negative with thresholds)
-- [ ] Build keyword extraction using NLTK (TF-IDF or frequency-based)
-- [ ] Create category tagging logic (teaching/content/engagement)
-- [ ] Auto-trigger analysis on feedback submission (signal/post_save)
-- [ ] Store results in SentimentResult model
-- [ ] Test with sample feedback data
+- [x] Create `analysis` app with SentimentResult model
+- [x] Integrate TextBlob for sentiment polarity & subjectivity scoring
+- [x] Implement sentiment classification (positive/neutral/negative with thresholds)
+- [x] Build keyword extraction using TextBlob noun phrases
+- [x] Create category tagging logic (teaching/content/engagement)
+- [x] Auto-trigger analysis on feedback submission (post_save signal)
+- [x] Store results in SentimentResult model
 
 **Deliverables**: Every submitted feedback auto-analyzed, sentiment + keywords stored
 
 ---
 
-### PHASE 4: Dashboard & Analytics (Week 7-8)
+### PHASE 4: Dashboard & Analytics (Week 7-8) --- COMPLETED
 **Goal**: Role-specific dashboards with charts and insights
 
 Tasks:
-- [ ] Create `dashboard` app
-- [ ] **Student Dashboard**: View own feedback history, see aggregate sentiment for courses
-- [ ] **Faculty Dashboard**:
-  - Sentiment trend over time (line chart - Chart.js)
-  - Average ratings breakdown (bar chart)
-  - Word cloud of frequent keywords
-  - Top positive/negative feedback snippets
-- [ ] **Admin Dashboard**:
-  - Department-wide sentiment overview (heatmap/table)
-  - Faculty comparison charts
-  - Course-wise sentiment trends
-  - Overall system statistics (total feedback, avg sentiment)
-- [ ] Implement date range filtering for analytics
-- [ ] Add Chart.js and/or Plotly integration
-- [ ] Create reusable chart components
+- [x] Create dashboard stats API endpoint (role-specific)
+- [x] Create course sentiment analytics API endpoint
+- [x] Create department analytics API endpoint (admin)
+- [x] **Student Dashboard**: Feedback count, courses, avg rating, recent feedback
+- [x] **Faculty Dashboard**: Sentiment distribution pie chart, courses with analytics links
+- [x] **Faculty Course Analytics**: Sentiment trend, rating breakdown, keyword cloud
+- [x] **Admin Dashboard**: System stats, course comparison, department overview table
+- [x] Implement Recharts components (PieChart, BarChart, LineChart, KeywordCloud)
+- [x] Build admin course management page (CRUD table)
 
 **Deliverables**: Fully functional dashboards with interactive charts per role
 
@@ -352,36 +348,36 @@ Tasks:
 
 ---
 
-## 6. API ENDPOINTS (URL Structure)
+## 6. API ENDPOINTS
 
 ```
 # Authentication
-/accounts/register/          POST   - User registration
-/accounts/login/             POST   - User login
-/accounts/logout/            GET    - Logout
-/accounts/profile/           GET    - View profile
+POST   /api/auth/register/              - User registration (returns token)
+POST   /api/auth/login/                 - User login (returns token)
+POST   /api/auth/logout/                - Logout (deletes token)
+GET    /api/auth/profile/               - View profile
+PUT    /api/auth/profile/               - Update profile
 
-# Courses
-/courses/                    GET    - List courses
-/courses/<id>/               GET    - Course detail
-/courses/create/             POST   - Create course (admin)
-/courses/<id>/edit/          POST   - Edit course (admin)
+# Courses (DRF ViewSet)
+GET    /api/courses/                    - List courses (role-filtered)
+POST   /api/courses/                    - Create course (admin only)
+GET    /api/courses/<id>/               - Course detail
+PUT    /api/courses/<id>/               - Update course (admin only)
+DELETE /api/courses/<id>/               - Delete course (admin only)
 
-# Feedback
-/feedback/submit/<course_id>/  GET/POST - Submit feedback
-/feedback/my/                  GET      - My feedback history
-/feedback/<id>/                GET      - Feedback detail
+# Feedback (DRF ViewSet)
+POST   /api/feedback/                   - Submit feedback (student only)
+GET    /api/feedback/                   - List feedback (role-filtered)
+GET    /api/feedback/<id>/              - Feedback detail
+DELETE /api/feedback/<id>/              - Delete feedback (admin only)
 
-# Dashboard
-/dashboard/                  GET    - Role-based dashboard redirect
-/dashboard/student/          GET    - Student dashboard
-/dashboard/faculty/          GET    - Faculty dashboard
-/dashboard/admin/            GET    - Admin dashboard
+# Analytics
+GET    /api/dashboard/stats/            - Role-specific dashboard stats
+GET    /api/analysis/course/<id>/       - Course sentiment + ratings + trends
+GET    /api/analysis/department/        - Department-wide analytics (admin only)
 
-# Analytics API (JSON for charts)
-/api/sentiment/course/<id>/  GET    - Sentiment data for a course
-/api/sentiment/faculty/<id>/ GET    - Sentiment data for a faculty
-/api/trends/                 GET    - Overall trend data
+# Django Admin
+GET    /admin/                          - Django admin panel
 ```
 
 ---
@@ -390,39 +386,60 @@ Tasks:
 
 1. **Anonymity**: Feedback is anonymous by default. The student FK exists for "one feedback per student" enforcement but is not exposed to faculty.
 
-2. **Real-time vs Batch Analysis**: Sentiment analysis runs synchronously on submit for the MVP (TextBlob is fast enough). For HuggingFace models, consider async processing with Celery.
+2. **Real-time vs Batch Analysis**: Sentiment analysis runs synchronously on submit via post_save signal (TextBlob is fast enough). For HuggingFace models, consider async processing with Celery.
 
 3. **Rating + Text**: Both structured (Likert 1-5) and unstructured (free text) feedback are collected. Ratings give quick quantitative metrics; text gives qualitative NLP insights.
 
 4. **Role Hierarchy**: Admin > Faculty > Student. Each role sees only relevant data. Faculty cannot see other faculty's feedback. Admin sees everything.
 
-5. **Feedback Periods**: Initially open-ended. Phase 5 adds formal feedback windows that admin can open/close per course.
+5. **API-First Architecture**: Django serves only as an API backend (DRF). The React SPA handles all UI rendering. This separation allows independent development of frontend and backend.
+
+6. **Token Auth over JWT**: DRF's built-in TokenAuthentication is simpler and supports server-side revocation (just delete the token row). JWT can be adopted later if stateless auth is needed.
+
+7. **Feedback Periods**: Initially open-ended. Phase 5 adds formal feedback windows that admin can open/close per course.
 
 ---
 
-## 8. DEPENDENCIES (requirements.txt)
+## 8. DEPENDENCIES
 
+### Backend (smartClassroom/requirements.txt)
 ```
-Django>=4.2
+Django>=5.2
+djangorestframework>=3.14
+django-cors-headers>=4.3
 textblob>=0.17.1
 nltk>=3.8
-plotly>=5.18
-django-crispy-forms>=2.0
-crispy-bootstrap5>=0.7
-Pillow>=10.0
 python-dotenv>=1.0
-# Phase 5 (optional)
-# transformers>=4.30
-# torch>=2.0
+```
+
+### Frontend (frontend/package.json)
+```
+react, react-dom, react-router-dom
+axios
+recharts
+react-hot-toast
+lucide-react
+tailwindcss
 ```
 
 ---
 
-## 9. GETTING STARTED (Next Steps)
+## 9. GETTING STARTED
 
-1. Install dependencies: `pip install -r requirements.txt`
-2. Create the `accounts` app: `python manage.py startapp accounts`
-3. Create CustomUser model and update `AUTH_USER_MODEL` in settings
-4. Run migrations: `python manage.py makemigrations && python manage.py migrate`
-5. Build login/register templates with Bootstrap 5
-6. Proceed phase by phase as outlined above
+### Backend
+```bash
+cd smartClassroom
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser  # Create an admin user
+python manage.py runserver        # Starts on http://localhost:8000
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev                       # Starts on http://localhost:5173
+```
+
+The Vite dev server proxies `/api/*` requests to Django on port 8000.
