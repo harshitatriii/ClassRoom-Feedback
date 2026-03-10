@@ -19,7 +19,7 @@ export default function CourseAnalytics() {
   }, [subjectId]);
 
   if (loading) return <LoadingSpinner />;
-  if (!data) return <p className="text-gray-400">Failed to load analytics.</p>;
+  if (!data) return <p className="text-gray-500">Failed to load analytics.</p>;
 
   const sentimentData = [
     { name: 'Positive', value: data.sentiment_distribution.positive },
@@ -37,28 +37,28 @@ export default function CourseAnalytics() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{data.subject.name}</h1>
-        <p className="text-gray-500">{data.subject.code} &middot; {data.ratings.total_count} feedback submissions</p>
+        <h1 className="text-2xl font-bold text-white">{data.subject.name}</h1>
+        <p className="text-gray-400">{data.subject.code} &middot; {data.ratings.total_count} feedback submissions</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Sentiment Distribution</h2>
+        <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Sentiment Distribution</h2>
           <SentimentPieChart data={sentimentData} />
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Rating Breakdown</h2>
+        <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+          <h2 className="text-lg font-semibold text-white mb-4">Rating Breakdown</h2>
           <RatingBarChart data={ratingData} />
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Sentiment Trend</h2>
+      <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Sentiment Trend</h2>
         <TrendLineChart data={data.trends?.filter(t => t.polarity !== null)} />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Top Keywords</h2>
+      <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Top Keywords</h2>
         <KeywordCloud keywords={data.keywords} />
       </div>
     </div>
