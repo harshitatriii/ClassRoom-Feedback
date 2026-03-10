@@ -1,10 +1,10 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from core import views
-
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.home, name='home'),
-    path('accounts/', include('accounts.urls')),
+    path('api/auth/', include('accounts.api_urls')),
+    path('api/', include('courses.urls')),
+    path('api/', include('feedback.urls')),
+    path('api/', include('analysis.urls')),
 ]

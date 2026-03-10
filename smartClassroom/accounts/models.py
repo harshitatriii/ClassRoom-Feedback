@@ -10,7 +10,26 @@ class CustomUser(AbstractUser):
     )
 
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
-    department = models.CharField(max_length=100, blank=True)
+    school = models.ForeignKey(
+        'courses.School',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users',
+    )
+    program = models.ForeignKey(
+        'courses.Program',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='students',
+        help_text='For students only',
+    )
+    current_semester = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Current semester (for students only)',
+    )
     enrollment_no = models.CharField(max_length=20, blank=True, help_text='For students only')
     faculty_id = models.CharField(max_length=20, blank=True, help_text='For faculty only')
     phone = models.CharField(max_length=15, blank=True)

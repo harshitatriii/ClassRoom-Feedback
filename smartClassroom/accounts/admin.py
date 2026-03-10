@@ -6,18 +6,20 @@ from .models import CustomUser
 
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'first_name', 'last_name', 'role', 'department', 'is_active')
-    list_filter = ('role', 'department', 'is_active')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'role', 'school', 'is_active')
+    list_filter = ('role', 'school', 'program', 'is_active')
     search_fields = ('username', 'email', 'first_name', 'last_name')
 
     fieldsets = UserAdmin.fieldsets + (
         ('Additional Info', {
-            'fields': ('role', 'department', 'enrollment_no', 'faculty_id', 'phone'),
+            'fields': ('role', 'school', 'program', 'current_semester',
+                       'enrollment_no', 'faculty_id', 'phone'),
         }),
     )
 
     add_fieldsets = UserAdmin.add_fieldsets + (
         ('Additional Info', {
-            'fields': ('role', 'department', 'enrollment_no', 'faculty_id', 'phone'),
+            'fields': ('role', 'school', 'program', 'current_semester',
+                       'enrollment_no', 'faculty_id', 'phone'),
         }),
     )

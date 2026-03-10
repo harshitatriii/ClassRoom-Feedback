@@ -1,8 +1,6 @@
 Django>=5.2
 djangorestframework>=3.14
+django-cors-headers>=4.3
 textblob>=0.17.1
 nltk>=3.8
-plotly>=5.18
-django-crispy-forms>=2.0
-crispy-bootstrap5>=2024.2
 python-dotenv>=1.0

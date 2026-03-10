@@ -1,5 +1,1 @@
-from django.shortcuts import render
-
-
-def home(request):
-    return render(request, 'home.html')
+# Core app - no template views needed (API-only backend)
