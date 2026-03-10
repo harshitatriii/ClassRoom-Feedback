@@ -17,9 +17,16 @@ class DashboardStatsView(APIView):
 
         if user.role == 'student':
             feedbacks = Feedback.objects.filter(student=user)
+            # Count available subjects for this student's program + semester
+            available_subjects = Subject.objects.filter(is_active=True)
+            if user.program_id:
+                available_subjects = available_subjects.filter(program=user.program)
+            if user.current_semester:
+                available_subjects = available_subjects.filter(semester=user.current_semester)
             return Response({
                 'total_feedback': feedbacks.count(),
-                'subjects_count': feedbacks.values('subject').distinct().count(),
+                'subjects_count': available_subjects.count(),
+                'feedback_given_count': feedbacks.values('subject').distinct().count(),
                 'avg_rating': feedbacks.aggregate(avg=Avg('rating_overall'))['avg'],
             })
 

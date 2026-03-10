@@ -21,6 +21,8 @@ class SchoolViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsAdminUser()]
+        if self.action == 'list':
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
 
@@ -36,6 +38,8 @@ class ProgramViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsAdminUser()]
+        if self.action == 'list':
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
