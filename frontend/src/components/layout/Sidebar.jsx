@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard, BookOpen, MessageSquarePlus,
-  History, Settings, GraduationCap
+  History, Settings, GraduationCap, Zap
 } from 'lucide-react';
 
 const studentLinks = [
@@ -30,11 +30,13 @@ export default function Sidebar() {
     : studentLinks;
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-4 border-b border-gray-200">
+    <aside className="w-64 bg-navy-900 border-r border-navy-700 flex flex-col">
+      <div className="p-4 border-b border-navy-700">
         <div className="flex items-center gap-2">
-          <GraduationCap className="h-6 w-6 text-blue-600" />
-          <span className="font-bold text-lg text-gray-800">Smart Classroom</span>
+          <div className="p-1.5 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-lg">
+            <Zap className="h-5 w-5 text-white" />
+          </div>
+          <span className="font-bold text-lg text-white tracking-tight">SmartClass</span>
         </div>
       </div>
       <nav className="flex-1 p-4 space-y-1">
@@ -43,10 +45,10 @@ export default function Sidebar() {
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'text-gray-400 hover:bg-navy-800 hover:text-gray-200'
               }`
             }
           >
@@ -55,6 +57,11 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div className="p-4 border-t border-navy-700">
+        <div className="px-3 py-2 rounded-lg bg-navy-800 text-xs text-gray-500 text-center">
+          Smart Classroom v1.0
+        </div>
+      </div>
     </aside>
   );
 }
