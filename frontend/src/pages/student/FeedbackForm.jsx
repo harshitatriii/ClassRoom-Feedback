@@ -1,0 +1,105 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getSubjects } from '../../api/courses';
+import { submitFeedback } from '../../api/feedback';
+import StarRating from '../../components/ui/StarRating';
+import toast from 'react-hot-toast';
+
+export default function FeedbackForm() {
+  const [subjects, setSubjects] = useState([]);
+  const [form, setForm] = useState({
+    subject: '', rating_teaching: 0, rating_content: 0,
+    rating_engagement: 0, rating_overall: 0,
+    text_feedback: '', is_anonymous: true,
+  });
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    getSubjects({ is_active: 'true' }).then((res) => {
+      setSubjects(res.data.results || res.data);
+    });
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.subject) return toast.error('Please select a subject');
+    if ([form.rating_teaching, form.rating_content, form.rating_engagement, form.rating_overall].some(r => r === 0)) {
+      return toast.error('Please provide all ratings');
+    }
+    setLoading(true);
+    try {
+      await submitFeedback({ ...form, subject: parseInt(form.subject) });
+      toast.success('Feedback submitted successfully!');
+      navigate('/student/feedback');
+    } catch (err) {
+      const msg = err.response?.data?.non_field_errors?.[0]
+        || err.response?.data?.detail
+        || Object.values(err.response?.data || {}).flat().join(', ')
+        || 'Failed to submit feedback';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Submit Feedback</h1>
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-8 space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Subject *</label>
+          <select
+            value={form.subject}
+            onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            required
+          >
+            <option value="">Select a subject...</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6">
+          <StarRating label="Teaching Quality *" value={form.rating_teaching}
+            onChange={(v) => setForm({ ...form, rating_teaching: v })} />
+          <StarRating label="Content Quality *" value={form.rating_content}
+            onChange={(v) => setForm({ ...form, rating_content: v })} />
+          <StarRating label="Engagement *" value={form.rating_engagement}
+            onChange={(v) => setForm({ ...form, rating_engagement: v })} />
+          <StarRating label="Overall *" value={form.rating_overall}
+            onChange={(v) => setForm({ ...form, rating_overall: v })} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Written Feedback</label>
+          <textarea
+            value={form.text_feedback}
+            onChange={(e) => setForm({ ...form, text_feedback: e.target.value })}
+            rows={4}
+            placeholder="Share your thoughts about this subject..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="anonymous"
+            checked={form.is_anonymous}
+            onChange={(e) => setForm({ ...form, is_anonymous: e.target.checked })}
+            className="rounded border-gray-300"
+          />
+          <label htmlFor="anonymous" className="text-sm text-gray-600">Submit anonymously</label>
+        </div>
+
+        <button type="submit" disabled={loading}
+          className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium">
+          {loading ? 'Submitting...' : 'Submit Feedback'}
+        </button>
+      </form>
+    </div>
+  );
+}
