@@ -339,20 +339,22 @@ Tasks:
 
 ---
 
-### PHASE 5: Advanced Features & Polish (Week 9-10)
+### PHASE 5: Advanced Features & Polish (Week 9-10) --- COMPLETED
 **Goal**: Improve AI accuracy, add advanced features, polish UI
 
 Tasks:
-- [ ] Upgrade to HuggingFace transformers for better sentiment accuracy (optional)
-- [ ] Add feedback response feature (faculty can respond to feedback)
-- [ ] Implement feedback periods (open/close feedback windows)
-- [ ] Add CSV/PDF export for reports
-- [ ] Email notifications (optional - feedback period reminders)
-- [ ] Improve UI/UX: loading states, responsive design, accessibility
-- [ ] Add pagination for feedback lists
-- [ ] Performance optimization (caching, query optimization)
+- [x] **UI Theme Overhaul**: Redesigned entire frontend with sporty dark bluish theme (navy-950 background, cyan/blue gradient accents, dark cards with glowing borders, gradient buttons with shadow effects)
+- [x] **Bug Fix - Register Page Redirect**: Fixed 401 interceptor redirecting users from register page to login (axios client + backend permission fix for unauthenticated school/program listing)
+- [x] **Backend Auth Fix**: Made School and Program list endpoints accessible without authentication (needed for registration cascading dropdowns)
+- [x] **Faculty Feedback Response**: Faculty can respond to individual student feedback. New `FeedbackResponse` model (one-to-one with Feedback). Response shown on feedback detail page with cyan accent border. Faculty see "Write Response" button on feedback they haven't replied to. Students see faculty responses on their feedback.
+- [x] **CSV Export for Reports**: Faculty and admin can export feedback data and subject analytics as CSV files. Two endpoints: `/api/export/feedback/` (all feedback with ratings, sentiment, keywords, faculty responses) and `/api/export/subjects/` (subject-level analytics summary). Download buttons on Faculty Dashboard, Admin Dashboard, and Subject Analytics pages.
+- [x] **Pagination**: Feedback history page now supports server-side pagination with Previous/Next controls. Shows total count and current page number.
+- [x] **Faculty Subject Analytics Enhanced**: Subject analytics page now shows a list of all feedback with response status (Replied / No reply), sentiment badges, and ratings. Faculty can click through to respond.
+- [ ] Upgrade to HuggingFace transformers for better sentiment accuracy (optional - deferred)
+- [ ] Implement feedback periods (open/close feedback windows - deferred)
+- [ ] Email notifications (optional - deferred)
 
-**Deliverables**: Production-ready features, improved AI accuracy
+**Deliverables**: Production-ready features, polished dark-themed UI, faculty-student communication, CSV exports, paginated lists
 
 ---
 

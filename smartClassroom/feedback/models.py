@@ -37,3 +37,26 @@ class Feedback(models.Model):
 
     def __str__(self):
         return f"Feedback by {self.student} for {self.subject.code}"
+
+
+class FeedbackResponse(models.Model):
+    feedback = models.OneToOneField(
+        Feedback,
+        on_delete=models.CASCADE,
+        related_name='response',
+    )
+    faculty = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='feedback_responses',
+        limit_choices_to={'role': 'faculty'},
+    )
+    response_text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Response by {self.faculty} for Feedback #{self.feedback_id}"
