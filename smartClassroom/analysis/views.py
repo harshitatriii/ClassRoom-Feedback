@@ -1,4 +1,8 @@
+import csv
+import io
+
 from django.db.models import Avg, Count
+from django.http import HttpResponse
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -159,3 +163,137 @@ class SchoolAnalyticsView(APIView):
             })
 
         return Response({'subjects': data})
+
+
+class ExportFeedbackCSVView(APIView):
+    """Export feedback data as CSV. Faculty sees own subjects, admin sees all."""
+    permission_classes = [IsFacultyOrAdmin]
+
+    def get(self, request):
+        user = request.user
+        feedbacks = Feedback.objects.select_related(
+            'student', 'subject', 'subject__faculty',
+            'subject__program', 'subject__program__school',
+        ).prefetch_related('sentiment', 'response')
+
+        if user.role == 'faculty':
+            feedbacks = feedbacks.filter(subject__faculty=user)
+
+        subject_id = request.query_params.get('subject')
+        if subject_id:
+            feedbacks = feedbacks.filter(subject_id=subject_id)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="feedback_report.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Subject Code', 'Subject Name', 'School', 'Program', 'Semester',
+            'Faculty', 'Student', 'Rating - Teaching', 'Rating - Content',
+            'Rating - Engagement', 'Rating - Overall', 'Text Feedback',
+            'Anonymous', 'Sentiment', 'Polarity', 'Subjectivity',
+            'Keywords', 'Faculty Response', 'Date',
+        ])
+
+        for fb in feedbacks.order_by('subject__code', '-created_at'):
+            student_name = 'Anonymous' if fb.is_anonymous else (fb.student.get_full_name() or fb.student.username)
+
+            sentiment_label = ''
+            polarity = ''
+            subjectivity = ''
+            keywords = ''
+            try:
+                sr = fb.sentiment
+                sentiment_label = sr.sentiment_label
+                polarity = f"{sr.polarity:.3f}"
+                subjectivity = f"{sr.subjectivity:.3f}"
+                keywords = ', '.join(sr.keywords) if sr.keywords else ''
+            except SentimentResult.DoesNotExist:
+                pass
+
+            faculty_response = ''
+            try:
+                faculty_response = fb.response.response_text
+            except Exception:
+                pass
+
+            writer.writerow([
+                fb.subject.code,
+                fb.subject.name,
+                fb.subject.program.school.code,
+                fb.subject.program.code,
+                fb.subject.semester,
+                fb.subject.faculty.get_full_name() or fb.subject.faculty.username,
+                student_name,
+                fb.rating_teaching,
+                fb.rating_content,
+                fb.rating_engagement,
+                fb.rating_overall,
+                fb.text_feedback,
+                'Yes' if fb.is_anonymous else 'No',
+                sentiment_label,
+                polarity,
+                subjectivity,
+                keywords,
+                faculty_response,
+                fb.created_at.strftime('%Y-%m-%d %H:%M'),
+            ])
+
+        return response
+
+
+class ExportSubjectReportCSVView(APIView):
+    """Export subject-level analytics summary as CSV."""
+    permission_classes = [IsFacultyOrAdmin]
+
+    def get(self, request):
+        user = request.user
+        subjects_qs = Subject.objects.filter(is_active=True).select_related(
+            'faculty', 'program', 'program__school'
+        )
+
+        if user.role == 'faculty':
+            subjects_qs = subjects_qs.filter(faculty=user)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="subject_analytics_report.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Subject Code', 'Subject Name', 'School', 'Program', 'Semester',
+            'Faculty', 'Total Feedback', 'Avg Teaching', 'Avg Content',
+            'Avg Engagement', 'Avg Overall', 'Avg Polarity',
+            'Positive Count', 'Neutral Count', 'Negative Count',
+        ])
+
+        for subject in subjects_qs.order_by('program__school__code', 'code'):
+            feedbacks = Feedback.objects.filter(subject=subject)
+            sentiments = SentimentResult.objects.filter(feedback__subject=subject)
+
+            avgs = feedbacks.aggregate(
+                avg_teaching=Avg('rating_teaching'),
+                avg_content=Avg('rating_content'),
+                avg_engagement=Avg('rating_engagement'),
+                avg_overall=Avg('rating_overall'),
+            )
+            avg_polarity = sentiments.aggregate(avg=Avg('polarity'))['avg']
+
+            writer.writerow([
+                subject.code,
+                subject.name,
+                subject.program.school.code,
+                subject.program.code,
+                subject.semester,
+                subject.faculty.get_full_name() or subject.faculty.username,
+                feedbacks.count(),
+                f"{avgs['avg_teaching']:.2f}" if avgs['avg_teaching'] else '--',
+                f"{avgs['avg_content']:.2f}" if avgs['avg_content'] else '--',
+                f"{avgs['avg_engagement']:.2f}" if avgs['avg_engagement'] else '--',
+                f"{avgs['avg_overall']:.2f}" if avgs['avg_overall'] else '--',
+                f"{avg_polarity:.3f}" if avg_polarity else '--',
+                sentiments.filter(sentiment_label='positive').count(),
+                sentiments.filter(sentiment_label='neutral').count(),
+                sentiments.filter(sentiment_label='negative').count(),
+            ])
+
+        return response

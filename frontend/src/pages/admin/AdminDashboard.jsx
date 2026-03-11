@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
-import { getDashboardStats, getSchoolAnalytics } from '../../api/dashboard';
+import { getDashboardStats, getSchoolAnalytics, exportFeedbackCSV, exportSubjectReportCSV } from '../../api/dashboard';
 import { getSchools } from '../../api/courses';
 import StatCard from '../../components/ui/StatCard';
 import SentimentPieChart from '../../components/charts/SentimentPieChart';
 import RatingBarChart from '../../components/charts/RatingBarChart';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { Users, MessageSquare, BookOpen, TrendingUp } from 'lucide-react';
+import { Users, MessageSquare, BookOpen, TrendingUp, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+function downloadBlob(blob, filename) {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -38,6 +48,22 @@ export default function AdminDashboard() {
     }
   }, [selectedSchool]);
 
+  const handleExportFeedback = async () => {
+    try {
+      const res = await exportFeedbackCSV();
+      downloadBlob(new Blob([res.data]), 'feedback_report.csv');
+      toast.success('Feedback report downloaded');
+    } catch { toast.error('Export failed'); }
+  };
+
+  const handleExportSubjects = async () => {
+    try {
+      const res = await exportSubjectReportCSV();
+      downloadBlob(new Blob([res.data]), 'subject_analytics_report.csv');
+      toast.success('Subject report downloaded');
+    } catch { toast.error('Export failed'); }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   const sentimentData = stats?.sentiment_distribution ? [
@@ -52,7 +78,19 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+        <div className="flex gap-2">
+          <button onClick={handleExportFeedback}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-navy-800 border border-navy-600 rounded-lg text-sm text-gray-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
+            <Download className="h-4 w-4" /> Feedback CSV
+          </button>
+          <button onClick={handleExportSubjects}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-navy-800 border border-navy-600 rounded-lg text-sm text-gray-300 hover:text-cyan-400 hover:border-cyan-500/30 transition-all">
+            <Download className="h-4 w-4" /> Subject Report
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard icon={Users} label="Total Users" value={stats?.total_users || 0} color="purple" />
