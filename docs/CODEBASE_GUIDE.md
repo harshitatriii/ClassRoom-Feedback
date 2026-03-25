@@ -6,7 +6,7 @@ A file-by-file walkthrough for someone new to this project. You don't need to be
 
 ## How This Project Works (30-Second Version)
 
-This is a **feedback system for a university**. Students submit ratings and written feedback about their subjects. The backend automatically runs sentiment analysis (positive/negative/neutral) on the text. Faculty see analytics about their subjects. Admins manage everything.
+This is a **feedback system for a university**. Students submit ratings and written feedback about their subjects. The backend automatically runs sentiment analysis (positive/negative/neutral), **aspect-based sentiment** (per teaching/content/engagement/assessment), and **emotion detection** (appreciation, frustration, confusion, etc.) on the text. Faculty see rich analytics about their subjects. There's also a **live feedback mode** where students send real-time reactions during class. Admins manage everything.
 
 **Two separate apps talk to each other:**
 
@@ -32,7 +32,7 @@ The frontend sends API requests (`/api/...`), the backend processes them, talks 
 
 ### Part 1: Backend — Django Project Setup
 
-> **What is Django?** A Python web framework. It organizes code into "apps" (folders), each handling a specific feature. The project has 5 apps: `accounts`, `courses`, `feedback`, `analysis`, `core`.
+> **What is Django?** A Python web framework. It organizes code into "apps" (folders), each handling a specific feature. The project has 6 apps: `accounts`, `courses`, `feedback`, `analysis`, `livefeedback`, `core`.
 
 | Order | File | What It Does |
 |-------|------|-------------|
@@ -111,13 +111,17 @@ School  --(has many)-->  Program  --(has many)-->  Subject  --(has many)-->  Fee
 
 | Order | File | What It Does |
 |-------|------|-------------|
-| 23 | `smartClassroom/analysis/sentiment.py` | **The AI engine.** Takes a text string, runs TextBlob on it, returns: polarity (-1 to 1), subjectivity (0 to 1), sentiment label (positive/neutral/negative), keywords (noun phrases), and category scores (how much the text mentions teaching/content/engagement topics). |
-| 24 | `smartClassroom/feedback/signals.py` | **The trigger.** Uses Django's `post_save` signal — every time a Feedback is saved to the database, this automatically calls `analyze_sentiment()` and creates a SentimentResult. No manual step needed. |
+| 23 | `smartClassroom/analysis/sentiment.py` | **The AI engine.** Contains three analysis functions: (1) `analyze_sentiment()` — overall TextBlob polarity/subjectivity/keywords, (2) `analyze_aspects()` — **Aspect-Based Sentiment Analysis** that splits text into sentences, classifies each into aspects (Teaching Quality, Content Quality, Engagement, Assessment & Fairness) via keyword dictionaries, and computes per-aspect sentiment, (3) `detect_emotions()` — keyword-based emotion lexicon detecting 6 emotions (appreciation, frustration, confusion, boredom, enthusiasm, satisfaction) with partial stem matching. All three are combined in `full_analysis()`. |
+| 24 | `smartClassroom/feedback/signals.py` | **The trigger.** Uses Django's `post_save` signal — every time a Feedback is saved to the database, this automatically calls `full_analysis()` and creates a SentimentResult with sentiment + ABSA + emotions. No manual step needed. |
 
 **The flow:**
 ```
 Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
-  -->  analyze_sentiment(text)  -->  SentimentResult created  -->  Available in dashboard
+  -->  full_analysis(text):
+       ├── analyze_sentiment()  -->  polarity, subjectivity, keywords
+       ├── analyze_aspects()    -->  per-aspect sentiment (teaching/content/engagement/assessment)
+       └── detect_emotions()    -->  emotion scores (appreciation/frustration/confusion/...)
+  -->  SentimentResult created  -->  Available in dashboard
 ```
 
 ---
@@ -131,6 +135,29 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | 27 | `smartClassroom/feedback/admin.py` | Registers Feedback in admin, shows student/subject/ratings/sentiment in list view. |
 | 28 | `smartClassroom/analysis/admin.py` | Registers SentimentResult in admin. |
 | 29 | `smartClassroom/seed_data.py` | **Run this to populate sample data.** Creates 2 schools, 3 programs, 3 faculty, 5 students, 1 admin, 5 subjects, 13 feedback entries with auto-generated sentiment. Run with `python seed_data.py`. |
+
+---
+
+### Part 7.5: Backend — Live Feedback (Real-Time During Class)
+
+| Order | File | What It Does |
+|-------|------|-------------|
+| 29.1 | `smartClassroom/livefeedback/models.py` | **Live session & pulse models.** `LiveSession` tracks active class sessions (faculty, subject, 6-char session code, active status, timestamps). `LivePulse` records individual student reactions (too_fast, too_slow, confused, got_it, interesting, boring). |
+| 29.2 | `smartClassroom/livefeedback/views.py` | **7 API views.** `StartSessionView` — faculty starts a session. `EndSessionView` — ends it. `ActiveSessionView` — check for active session. `JoinSessionView` — student enters a session code. `SubmitPulseView` — student sends a reaction (rate-limited to 1 per 5 sec). `SessionDashboardView` — aggregated real-time data (reaction counts, timeline, recent pulses). `SessionHistoryView` — past sessions list. |
+| 29.3 | `smartClassroom/livefeedback/serializers.py` | Serializers for LiveSession (includes faculty name, subject info, pulse count) and LivePulse. |
+| 29.4 | `smartClassroom/livefeedback/urls.py` | Maps `/api/live/start/`, `/api/live/end/<id>/`, `/api/live/active/`, `/api/live/join/`, `/api/live/pulse/`, `/api/live/dashboard/<id>/`, `/api/live/history/`. |
+| 29.5 | `smartClassroom/livefeedback/admin.py` | Registers LiveSession and LivePulse in Django admin. |
+
+**The flow:**
+```
+Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123")
+  -->  Faculty shares code with class
+  -->  Students enter code to join  -->  JoinSessionView validates code
+  -->  Students tap reaction buttons  -->  LivePulse records created (rate-limited)
+  -->  Faculty dashboard polls /api/live/dashboard/<id>/ every 3 seconds
+  -->  Returns: reaction distribution, timeline (30-sec buckets), recent pulses, student count
+  -->  Faculty ends session  -->  LiveSession.is_active = False
+```
 
 ---
 
@@ -293,3 +320,40 @@ Open `http://localhost:5173` in your browser.
 - Admin: `admin` / `admin1234`
 - Faculty: `faculty1` / `faculty1234`
 - Student: `student1` / `student1234`
+
+  Seed Data Users (password from seed_data.py)                                                         
+  ┌─────────────┬────────────┬─────────┬───────────────┬─────────┬──────────┐                       
+  │  Username   │  Password  │  Role   │     Name      │ Program │ Semester │                       
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_sharma │ faculty123 │ Faculty │ Rajesh Sharma │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_gupta  │ faculty123 │ Faculty │ Priya Gupta   │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_singh  │ faculty123 │ Faculty │ Amit Singh    │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student1    │ student123 │ Student │ Ankit Kumar   │ BTECH   │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student2    │ student123 │ Student │ Sneha Patel   │ BTECH   │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student3    │ student123 │ Student │ Rahul Verma   │ BTECH   │ 7        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student4    │ student123 │ Student │ Pooja Jain    │ BCA     │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student5    │ student123 │ Student │ Vikram Reddy  │ BTECH   │ 5        │
+  └─────────────┴────────────┴─────────┴───────────────┴─────────┴──────────┘
+
+  Your Account
+
+  ┌───────────────┬────────────────┬─────────┬─────────┬──────────┐
+  │   Username    │    Password    │  Role   │ Program │ Semester │
+  ├───────────────┼────────────────┼─────────┼─────────┼──────────┤
+  │ harshitatri74 │ (you set this) │ Student │ BTECH   │ 8        │
+  └───────────────┴────────────────┴─────────┴─────────┴──────────┘
+
+  Admin
+
+  ┌──────────┬────────────────────────────────────────┬──────────┐
+  │ Username │                Password                │   Role   │
+  ├──────────┼────────────────────────────────────────┼──────────┤
+  │ admin    │ (whatever you set via createsuperuser) │ Student* │
+  └──────────┴────────────────────────────────────────┴──────────┘
