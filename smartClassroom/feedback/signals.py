@@ -13,12 +13,12 @@ def trigger_sentiment_analysis(sender, instance, created, **kwargs):
         return
 
     from analysis.models import SentimentResult
-    from analysis.sentiment import analyze_sentiment
+    from analysis.sentiment import full_analysis
 
     if SentimentResult.objects.filter(feedback=instance).exists():
         return
 
-    result = analyze_sentiment(instance.text_feedback)
+    result = full_analysis(instance.text_feedback)
 
     SentimentResult.objects.create(
         feedback=instance,
@@ -27,4 +27,6 @@ def trigger_sentiment_analysis(sender, instance, created, **kwargs):
         sentiment_label=result['sentiment_label'],
         keywords=result['keywords'],
         category_scores=result['category_scores'],
+        aspect_sentiments=result['aspect_sentiments'],
+        emotions=result['emotions'],
     )
