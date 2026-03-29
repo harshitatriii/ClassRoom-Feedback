@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard, BookOpen, MessageSquarePlus,
-  History, Settings, GraduationCap, Zap
+  History, Settings, GraduationCap, Zap, Radio
 } from 'lucide-react';
 
 const studentLinks = [
@@ -10,11 +10,13 @@ const studentLinks = [
   { to: '/subjects', label: 'Subjects', icon: BookOpen },
   { to: '/student/feedback/new', label: 'Submit Feedback', icon: MessageSquarePlus },
   { to: '/student/feedback', label: 'My Feedback', icon: History },
+  { to: '/student/live', label: 'Live Feedback', icon: Radio },
 ];
 
 const facultyLinks = [
   { to: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/subjects', label: 'My Subjects', icon: BookOpen },
+  { to: '/faculty/live', label: 'Live Session', icon: Radio },
 ];
 
 const adminLinks = [
