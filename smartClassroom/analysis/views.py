@@ -1,5 +1,6 @@
 import csv
 import io
+from collections import defaultdict
 
 from django.db.models import Avg, Count
 from django.http import HttpResponse
@@ -37,6 +38,10 @@ class DashboardStatsView(APIView):
         elif user.role == 'faculty':
             feedbacks = Feedback.objects.filter(subject__faculty=user)
             sentiments = SentimentResult.objects.filter(feedback__subject__faculty=user)
+
+            # Aggregate emotion distribution across all feedback
+            emotion_agg = _aggregate_emotions(sentiments)
+
             return Response({
                 'total_feedback': feedbacks.count(),
                 'subjects_count': Subject.objects.filter(faculty=user).count(),
@@ -47,11 +52,14 @@ class DashboardStatsView(APIView):
                     'neutral': sentiments.filter(sentiment_label='neutral').count(),
                     'negative': sentiments.filter(sentiment_label='negative').count(),
                 },
+                'emotion_distribution': emotion_agg,
             })
 
         else:  # admin
             feedbacks = Feedback.objects.all()
             sentiments = SentimentResult.objects.all()
+            emotion_agg = _aggregate_emotions(sentiments)
+
             return Response({
                 'total_users': user.__class__.objects.count(),
                 'total_feedback': feedbacks.count(),
@@ -64,6 +72,7 @@ class DashboardStatsView(APIView):
                     'neutral': sentiments.filter(sentiment_label='neutral').count(),
                     'negative': sentiments.filter(sentiment_label='negative').count(),
                 },
+                'emotion_distribution': emotion_agg,
             })
 
 
@@ -113,6 +122,12 @@ class SubjectSentimentView(APIView):
                 entry['polarity'] = None
             trend_data.append(entry)
 
+        # --- ABSA: Aggregate aspect sentiments across all feedback ---
+        aspect_agg = _aggregate_aspects(sentiments)
+
+        # --- Emotion: Aggregate emotion scores across all feedback ---
+        emotion_agg = _aggregate_emotions(sentiments)
+
         return Response({
             'subject': {
                 'id': subject.id,
@@ -124,6 +139,8 @@ class SubjectSentimentView(APIView):
             'average_polarity': avg_polarity,
             'keywords': [{'word': w, 'count': c} for w, c in top_keywords],
             'trends': trend_data,
+            'aspect_sentiments': aspect_agg,
+            'emotion_distribution': emotion_agg,
         })
 
 
@@ -192,7 +209,7 @@ class ExportFeedbackCSVView(APIView):
             'Faculty', 'Student', 'Rating - Teaching', 'Rating - Content',
             'Rating - Engagement', 'Rating - Overall', 'Text Feedback',
             'Anonymous', 'Sentiment', 'Polarity', 'Subjectivity',
-            'Keywords', 'Faculty Response', 'Date',
+            'Keywords', 'Dominant Emotion', 'Faculty Response', 'Date',
         ])
 
         for fb in feedbacks.order_by('subject__code', '-created_at'):
@@ -202,12 +219,16 @@ class ExportFeedbackCSVView(APIView):
             polarity = ''
             subjectivity = ''
             keywords = ''
+            dominant_emotion = ''
             try:
                 sr = fb.sentiment
                 sentiment_label = sr.sentiment_label
                 polarity = f"{sr.polarity:.3f}"
                 subjectivity = f"{sr.subjectivity:.3f}"
                 keywords = ', '.join(sr.keywords) if sr.keywords else ''
+                if sr.emotions:
+                    dominant = max(sr.emotions, key=sr.emotions.get)
+                    dominant_emotion = dominant if sr.emotions.get(dominant, 0) > 0 else 'neutral'
             except SentimentResult.DoesNotExist:
                 pass
 
@@ -235,6 +256,7 @@ class ExportFeedbackCSVView(APIView):
                 polarity,
                 subjectivity,
                 keywords,
+                dominant_emotion,
                 faculty_response,
                 fb.created_at.strftime('%Y-%m-%d %H:%M'),
             ])
@@ -297,3 +319,55 @@ class ExportSubjectReportCSVView(APIView):
             ])
 
         return response
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _aggregate_aspects(sentiments):
+    """Aggregate aspect sentiments across multiple SentimentResult records."""
+    aspect_counts = defaultdict(lambda: {'positive': 0, 'neutral': 0, 'negative': 0,
+                                          'total_polarity': 0.0, 'count': 0, 'label': ''})
+    for s in sentiments:
+        if not s.aspect_sentiments:
+            continue
+        for aspect_key, aspect_data in s.aspect_sentiments.items():
+            bucket = aspect_counts[aspect_key]
+            bucket['label'] = aspect_data.get('label', aspect_key)
+            sentiment = aspect_data.get('sentiment', 'neutral')
+            bucket[sentiment] = bucket.get(sentiment, 0) + 1
+            bucket['total_polarity'] += aspect_data.get('polarity', 0)
+            bucket['count'] += 1
+
+    result = []
+    for aspect_key, data in aspect_counts.items():
+        count = data['count'] or 1
+        result.append({
+            'aspect': aspect_key,
+            'label': data['label'],
+            'avg_polarity': round(data['total_polarity'] / count, 4),
+            'positive': data['positive'],
+            'neutral': data['neutral'],
+            'negative': data['negative'],
+            'total': data['count'],
+        })
+
+    return result
+
+
+def _aggregate_emotions(sentiments):
+    """Aggregate emotion scores across multiple SentimentResult records."""
+    emotion_totals = defaultdict(float)
+    count = 0
+    for s in sentiments:
+        if not s.emotions:
+            continue
+        count += 1
+        for emotion, score in s.emotions.items():
+            emotion_totals[emotion] += score
+
+    if count == 0:
+        return {}
+
+    return {emotion: round(total / count, 4) for emotion, total in emotion_totals.items()}
