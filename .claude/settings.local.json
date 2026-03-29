@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"D:\\\\Sem 8 Project\\\\Project\\\\ClassRoom-Feedback\\\\smartClassroom\" && \"../venv/Scripts/python.exe\" manage.py makemigrations feedback 2>&1)",
+      "Bash(cd \"D:\\\\Sem 8 Project\\\\Project\\\\ClassRoom-Feedback\\\\frontend\" && npm run build 2>&1)",
+      "Bash(cd \"D:\\\\Sem 8 Project\\\\Project\\\\ClassRoom-Feedback\\\\smartClassroom\" && \"../venv/Scripts/python.exe\" -c \"\nimport django, os\nos.environ['DJANGO_SETTINGS_MODULE'] = 'smartClassroom.settings'\ndjango.setup\\(\\)\nfrom accounts.models import CustomUser\nfor u in CustomUser.objects.all\\(\\):\n    print\\(f'{u.id:3d} | {u.username:20s} | {u.role:8s} | {u.get_full_name\\(\\) or \\\\\"-\\\\\":20s} | school={u.school_id} | program={u.program_id} | sem={u.current_semester}'\\)\n\" 2>&1)"
+    ]
+  }
+}

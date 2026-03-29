@@ -16,7 +16,9 @@ import FeedbackHistory from './pages/student/FeedbackHistory';
 
 import FacultyDashboard from './pages/faculty/FacultyDashboard';
 import CourseAnalytics from './pages/faculty/CourseAnalytics';
+import LiveSessionPage from './pages/faculty/LiveSession';
 
+import LivePulsePage from './pages/student/LivePulse';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import CourseManagement from './pages/admin/CourseManagement';
 
@@ -56,11 +58,13 @@ export default function App() {
                 <Route path="student/dashboard" element={<StudentDashboard />} />
                 <Route path="student/feedback/new" element={<FeedbackForm />} />
                 <Route path="student/feedback" element={<FeedbackHistory />} />
+                <Route path="student/live" element={<LivePulsePage />} />
               </Route>
 
               <Route element={<RoleRoute roles={['faculty']} />}>
                 <Route path="faculty/dashboard" element={<FacultyDashboard />} />
                 <Route path="faculty/analytics/:subjectId" element={<CourseAnalytics />} />
+                <Route path="faculty/live" element={<LiveSessionPage />} />
               </Route>
 
               <Route element={<RoleRoute roles={['admin']} />}>

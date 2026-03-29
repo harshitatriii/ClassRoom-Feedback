@@ -181,8 +181,9 @@ Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123
 | 32 | `frontend/src/api/client.js` | **The HTTP client.** Creates an Axios instance with base URL `/api`. Two interceptors: (1) automatically attaches the auth token to every request, (2) redirects to login if a 401 (unauthorized) response comes back. All other API files import this. |
 | 33 | `frontend/src/api/auth.js` | Functions: `registerUser()`, `loginUser()`, `logoutUser()`, `getProfile()`, `updateProfile()`. Each is a one-liner calling the client. |
 | 34 | `frontend/src/api/courses.js` | Functions for schools (`getSchools`, `createSchool`, etc.), programs (`getPrograms`, etc.), and subjects (`getSubjects`, `createSubject`, etc.). |
-| 35 | `frontend/src/api/feedback.js` | `submitFeedback()`, `getFeedbacks()`, `getFeedbackDetail()`, `deleteFeedback()`. |
-| 36 | `frontend/src/api/dashboard.js` | `getDashboardStats()`, `getSubjectAnalytics(id)`, `getSchoolAnalytics(params)`. |
+| 35 | `frontend/src/api/feedback.js` | `submitFeedback()`, `getFeedbacks()`, `getFeedbackDetail()`, `deleteFeedback()`, plus feedback response functions. |
+| 36 | `frontend/src/api/dashboard.js` | `getDashboardStats()`, `getSubjectAnalytics(id)`, `getSchoolAnalytics(params)`, CSV export functions. |
+| 36.1 | `frontend/src/api/live.js` | **Live feedback API.** `startLiveSession()`, `endLiveSession()`, `getActiveSession()`, `joinSession()`, `submitPulse()`, `getSessionDashboard()`, `getSessionHistory()`. |
 
 ---
 
@@ -203,7 +204,7 @@ Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123
 | Order | File | What It Does |
 |-------|------|-------------|
 | 42 | `frontend/src/components/layout/AppLayout.jsx` | The page shell — renders Sidebar on the left + TopBar on top + page content in the center. |
-| 43 | `frontend/src/components/layout/Sidebar.jsx` | Navigation menu. Shows different links based on user role (student sees "My Subjects" + "Submit Feedback", faculty sees "My Subjects" + "Analytics", admin sees "Dashboard" + "Manage Subjects"). |
+| 43 | `frontend/src/components/layout/Sidebar.jsx` | Navigation menu. Shows different links based on user role (student sees "My Subjects" + "Submit Feedback" + "Live Feedback", faculty sees "My Subjects" + "Live Session", admin sees "Dashboard" + "Manage Subjects"). |
 | 44 | `frontend/src/components/layout/TopBar.jsx` | Top bar with the app title and logout button. |
 
 ---
@@ -222,12 +223,14 @@ Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123
 | 47 | `frontend/src/pages/student/StudentDashboard.jsx` | Shows stat cards (feedback count, subjects, avg rating) and a list of recent feedback. |
 | 48 | `frontend/src/pages/student/FeedbackForm.jsx` | Feedback submission form: select a subject (auto-filtered to student's program + semester), rate 1-5 stars on four categories, write text feedback, toggle anonymous. |
 | 49 | `frontend/src/pages/student/FeedbackHistory.jsx` | Table of all feedback the student has submitted, with sentiment labels shown. |
+| 49.1 | `frontend/src/pages/student/LivePulse.jsx` | **Live feedback page.** Students enter a 6-digit session code to join a live class session. Shows large reaction buttons (Got It, Interesting, Confused, Too Fast, Too Slow, Boring) with a 5-second cooldown animation between reactions. Tracks pulse count. |
 
 #### Faculty Pages
 | Order | File | What It Does |
 |-------|------|-------------|
 | 50 | `frontend/src/pages/faculty/FacultyDashboard.jsx` | Sentiment distribution pie chart across all subjects + list of faculty's subjects with links to detailed analytics. |
-| 51 | `frontend/src/pages/faculty/CourseAnalytics.jsx` | Deep-dive analytics for one subject: sentiment trend over time (line chart), rating breakdown (bar chart), keyword cloud, and individual feedback list. |
+| 51 | `frontend/src/pages/faculty/CourseAnalytics.jsx` | Deep-dive analytics for one subject: sentiment trend (line chart), rating breakdown (bar chart), **aspect-based sentiment** (stacked bar chart + polarity cards), **emotion radar chart** (with emoji tiles), keyword cloud, and individual feedback list. |
+| 51.1 | `frontend/src/pages/faculty/LiveSession.jsx` | **Live session dashboard.** Faculty selects a subject and goes live. Shows a session code to share with students. Real-time dashboard (polls every 3 sec) with: reaction distribution bar chart, animated progress bars per reaction, dominant mood indicator, class pulse health, timeline area chart, and recent reaction stream. |
 
 #### Admin Pages
 | Order | File | What It Does |
@@ -258,6 +261,8 @@ Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123
 | 64 | `frontend/src/components/charts/RatingBarChart.jsx` | Recharts bar chart comparing average ratings across categories. |
 | 65 | `frontend/src/components/charts/TrendLineChart.jsx` | Recharts line chart showing sentiment trend over time. |
 | 66 | `frontend/src/components/charts/KeywordCloud.jsx` | Displays extracted keywords as colored tags. |
+| 67 | `frontend/src/components/charts/AspectSentimentChart.jsx` | **ABSA visualization.** Stacked horizontal bar chart showing positive/neutral/negative counts per aspect (Teaching Quality, Content Quality, Engagement, Assessment). Below: polarity score cards with color-coded values and mention counts. |
+| 68 | `frontend/src/components/charts/EmotionChart.jsx` | **Emotion radar chart.** Recharts radar showing intensity (0-100%) of 6 emotions. Below: emoji-based tiles with scores. Dominant emotion highlighted with cyan border. |
 
 ---
 
@@ -278,9 +283,20 @@ Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123
 ### How Sentiment Analysis Works
 1. Student submits feedback with text
 2. Django `post_save` signal fires automatically
-3. `analyze_sentiment()` runs TextBlob on the text
-4. Results (polarity, subjectivity, keywords, category scores) are saved as a `SentimentResult`
-5. Dashboards query these results for charts and analytics
+3. `full_analysis()` runs three analyses:
+   - **Overall sentiment**: TextBlob polarity/subjectivity → positive/neutral/negative
+   - **Aspect-Based Sentiment (ABSA)**: Splits text into sentences, maps to aspects (teaching, content, engagement, assessment), computes per-aspect polarity
+   - **Emotion Detection**: Keyword lexicon matches 6 emotions (appreciation, frustration, confusion, boredom, enthusiasm, satisfaction)
+4. All results saved as a `SentimentResult` (polarity, keywords, aspect_sentiments, emotions)
+5. Dashboards query and aggregate these results for charts and analytics
+
+### How Live Feedback Works
+1. Faculty starts a live session → gets a 6-char code (e.g., "ABC123")
+2. Faculty shares the code with the class (show on screen, say aloud)
+3. Students enter the code on the "Live Feedback" page to join
+4. Students tap reaction buttons (Got It, Confused, Too Fast, etc.) — rate-limited to 1 per 5 seconds
+5. Faculty dashboard auto-refreshes every 3 seconds showing real-time reaction distribution, timeline, and mood indicators
+6. Faculty ends the session when class is over
 
 ### The University Hierarchy
 ```
