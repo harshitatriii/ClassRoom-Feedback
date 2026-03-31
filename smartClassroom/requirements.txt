@@ -4,3 +4,7 @@ django-cors-headers>=4.3
 textblob>=0.17.1
 nltk>=3.8
 python-dotenv>=1.0
+dj-database-url>=2.1
+psycopg2-binary>=2.9
+whitenoise>=6.5
+gunicorn>=21.2
