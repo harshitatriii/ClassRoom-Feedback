@@ -1,5 +1,24 @@
 # Changelog
 
+## V2: Live Questions, Student Attendance, Custom Sessions & Feedback Campaigns
+
+**Date**: March 2026
+**Scope**: Full-stack — 4 new features (see `docs/FEATURES_V2.md` for full details)
+
+### Features Added
+
+1. **Live Questions During Class** — Students can ask text questions (anonymously or not) during live sessions. Other students upvote. Faculty sees questions sorted by votes and marks them answered.
+
+2. **Active/Missing Student List** — Faculty can click "Active Students" in the live dashboard to see who's present, who's missing from the class roster, and flag outsiders not in the roster.
+
+3. **Custom Live Sessions** — Faculty can start live sessions for hackathons, masterclasses, workshops, seminars — not just classes. Subject field is now optional.
+
+4. **Semester-End Feedback Campaigns** — Admins create time-bound feedback campaigns targeting specific programs/semesters. Students see progress banners on their dashboard. Admins track completion rates.
+
+### New Endpoints: 9 | New Models: 3 | New Pages: 1 | Modified Files: ~20
+
+---
+
 ## Novelty Features: ABSA, Emotion Detection & Real-Time Live Feedback
 
 **Date**: March 2026
