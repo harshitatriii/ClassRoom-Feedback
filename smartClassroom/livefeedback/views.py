@@ -7,19 +7,28 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import CustomUser
 from accounts.permissions import IsFacultyOrAdmin
-from .models import LiveSession, LivePulse
-from .serializers import LiveSessionSerializer, LivePulseSerializer
+from .models import LiveSession, LivePulse, LiveQuestion, LiveQuestionVote
+from .serializers import LiveSessionSerializer, LivePulseSerializer, LiveQuestionSerializer
 
 
 class StartSessionView(APIView):
-    """Faculty starts a new live session for a subject."""
+    """Faculty starts a new live session for a subject or custom event."""
     permission_classes = [IsFacultyOrAdmin]
 
     def post(self, request):
         subject_id = request.data.get('subject')
-        if not subject_id:
-            return Response({'detail': 'subject is required.'}, status=400)
+        title = request.data.get('title', '').strip()
+        session_type = request.data.get('session_type', 'class')
+
+        # Must provide either a subject (for class sessions) or a title (for custom sessions)
+        if not subject_id and not title:
+            return Response({'detail': 'Either subject or title is required.'}, status=400)
+
+        valid_types = [c[0] for c in LiveSession.SESSION_TYPE_CHOICES]
+        if session_type not in valid_types:
+            return Response({'detail': f'Invalid session_type. Choose from: {valid_types}'}, status=400)
 
         # End any existing active sessions for this faculty
         LiveSession.objects.filter(
@@ -28,7 +37,9 @@ class StartSessionView(APIView):
 
         session = LiveSession.objects.create(
             faculty=request.user,
-            subject_id=subject_id,
+            subject_id=subject_id if subject_id else None,
+            title=title,
+            session_type=session_type,
         )
         return Response(LiveSessionSerializer(session).data, status=201)
 
@@ -170,6 +181,76 @@ class SessionDashboardView(APIView):
         })
 
 
+class SessionStudentsView(APIView):
+    """
+    Returns lists of active and missing students for a live session.
+    Active = students who sent at least one pulse.
+    Missing = students in the same program+semester as the subject who haven't sent a pulse.
+    For custom (non-subject) sessions, only active students are returned.
+    """
+    permission_classes = [IsFacultyOrAdmin]
+
+    def get(self, request, session_id):
+        try:
+            session = LiveSession.objects.select_related('subject__program').get(pk=session_id)
+        except LiveSession.DoesNotExist:
+            return Response({'detail': 'Session not found.'}, status=404)
+
+        if request.user.role == 'faculty' and session.faculty != request.user:
+            return Response({'detail': 'Not your session.'}, status=403)
+
+        # Get active student IDs from pulses
+        active_ids = set(
+            session.pulses.exclude(student__isnull=True)
+            .values_list('student_id', flat=True).distinct()
+        )
+
+        def _serialize_user(u):
+            return {
+                'id': u.id,
+                'username': u.username,
+                'full_name': u.get_full_name() or u.username,
+                'enrollment_no': u.enrollment_no,
+            }
+
+        active_users = CustomUser.objects.filter(id__in=active_ids)
+        active_list = [_serialize_user(u) for u in active_users]
+
+        missing_list = []
+        roster_count = 0
+        outsiders = []
+
+        # For class sessions with a subject, compute the class roster
+        if session.subject:
+            roster_qs = CustomUser.objects.filter(
+                role='student',
+                program=session.subject.program,
+                current_semester=session.subject.semester,
+            )
+            roster_ids = set(roster_qs.values_list('id', flat=True))
+            roster_count = len(roster_ids)
+
+            missing_ids = roster_ids - active_ids
+            missing_users = CustomUser.objects.filter(id__in=missing_ids)
+            missing_list = [_serialize_user(u) for u in missing_users]
+
+            # Outsiders: active students who are NOT in the class roster
+            outsider_ids = active_ids - roster_ids
+            if outsider_ids:
+                outsider_users = CustomUser.objects.filter(id__in=outsider_ids)
+                outsiders = [_serialize_user(u) for u in outsider_users]
+
+        return Response({
+            'active': active_list,
+            'missing': missing_list,
+            'outsiders': outsiders,
+            'active_count': len(active_list),
+            'missing_count': len(missing_list),
+            'roster_count': roster_count,
+            'is_class_session': session.subject is not None,
+        })
+
+
 class SessionHistoryView(APIView):
     """List past sessions for a faculty member."""
     permission_classes = [IsFacultyOrAdmin]
@@ -178,6 +259,101 @@ class SessionHistoryView(APIView):
         sessions = LiveSession.objects.filter(faculty=request.user).select_related('subject')
         data = LiveSessionSerializer(sessions[:20], many=True).data
         return Response(data)
+
+
+class SubmitQuestionView(APIView):
+    """Student submits a question during a live session."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        session_id = request.data.get('session')
+        text = request.data.get('text', '').strip()
+        is_anonymous = request.data.get('is_anonymous', False)
+
+        if not session_id or not text:
+            return Response({'detail': 'session and text are required.'}, status=400)
+
+        try:
+            session = LiveSession.objects.get(pk=session_id, is_active=True)
+        except LiveSession.DoesNotExist:
+            return Response({'detail': 'Session not found or has ended.'}, status=404)
+
+        question = LiveQuestion.objects.create(
+            session=session,
+            student=request.user,
+            text=text,
+            is_anonymous=is_anonymous,
+        )
+        return Response(
+            LiveQuestionSerializer(question, context={'request': request}).data,
+            status=201,
+        )
+
+
+class ListQuestionsView(APIView):
+    """List all questions for a session, sorted by upvotes (most first)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, session_id):
+        try:
+            session = LiveSession.objects.get(pk=session_id)
+        except LiveSession.DoesNotExist:
+            return Response({'detail': 'Session not found.'}, status=404)
+
+        questions = session.questions.annotate(
+            upvote_count=Count('votes')
+        ).order_by('-upvote_count', '-created_at')
+
+        return Response(
+            LiveQuestionSerializer(questions, many=True, context={'request': request}).data
+        )
+
+
+class UpvoteQuestionView(APIView):
+    """Toggle upvote on a question. Upvote if not voted, remove if already voted."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, question_id):
+        try:
+            question = LiveQuestion.objects.get(pk=question_id)
+        except LiveQuestion.DoesNotExist:
+            return Response({'detail': 'Question not found.'}, status=404)
+
+        vote, created = LiveQuestionVote.objects.get_or_create(
+            question=question,
+            student=request.user,
+        )
+        if not created:
+            vote.delete()
+            action = 'removed'
+        else:
+            action = 'added'
+
+        return Response({
+            'action': action,
+            'upvote_count': question.votes.count(),
+        })
+
+
+class MarkQuestionAnsweredView(APIView):
+    """Faculty marks a question as answered."""
+    permission_classes = [IsFacultyOrAdmin]
+
+    def post(self, request, question_id):
+        try:
+            question = LiveQuestion.objects.select_related('session').get(pk=question_id)
+        except LiveQuestion.DoesNotExist:
+            return Response({'detail': 'Question not found.'}, status=404)
+
+        if request.user.role == 'faculty' and question.session.faculty != request.user:
+            return Response({'detail': 'Not your session.'}, status=403)
+
+        question.is_answered = not question.is_answered
+        question.save(update_fields=['is_answered'])
+
+        return Response({
+            'is_answered': question.is_answered,
+        })
 
 
 def _build_timeline(pulses, session_start, bucket_seconds=30):
