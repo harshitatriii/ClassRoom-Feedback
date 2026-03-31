@@ -110,7 +110,8 @@ REST_FRAMEWORK = {
 }
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://localhost:5173'
-).split(',')
+CORS_ALLOWED_ORIGINS = [
+    origin for origin in
+    os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173').split(',')
+    if origin.strip()
+]
