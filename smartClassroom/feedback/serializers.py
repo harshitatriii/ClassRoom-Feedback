@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from accounts.serializers import UserMinimalSerializer
 from courses.serializers import SubjectListSerializer
-from .models import Feedback, FeedbackResponse
+from .models import Feedback, FeedbackResponse, FeedbackCampaign
 
 
 class FeedbackResponseSerializer(serializers.ModelSerializer):
@@ -43,7 +43,7 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'subject', 'rating_teaching', 'rating_content',
             'rating_engagement', 'rating_overall', 'text_feedback',
-            'is_anonymous', 'created_at',
+            'is_anonymous', 'campaign', 'created_at',
         )
         read_only_fields = ('id', 'created_at')
 
@@ -58,6 +58,40 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['student'] = self.context['request'].user
         return super().create(validated_data)
+
+
+class FeedbackCampaignSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    program_name = serializers.SerializerMethodField()
+    is_open = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = FeedbackCampaign
+        fields = (
+            'id', 'title', 'description', 'program', 'program_name',
+            'semester', 'is_mandatory', 'start_date', 'end_date',
+            'is_active', 'is_open', 'created_by', 'created_by_name', 'created_at',
+        )
+        read_only_fields = ('id', 'created_by', 'created_at')
+
+    def get_created_by_name(self, obj):
+        if obj.created_by:
+            return obj.created_by.get_full_name() or obj.created_by.username
+        return None
+
+    def get_program_name(self, obj):
+        if obj.program:
+            return f"{obj.program.code} - {obj.program.name}"
+        return 'All Programs'
+
+
+class CampaignStudentStatusSerializer(serializers.Serializer):
+    """Shows a student their progress for an active campaign."""
+    campaign = FeedbackCampaignSerializer()
+    total_subjects = serializers.IntegerField()
+    completed_subjects = serializers.IntegerField()
+    pending_subjects = serializers.ListField()
+    completion_percentage = serializers.FloatField()
 
 
 class FeedbackDetailSerializer(serializers.ModelSerializer):
