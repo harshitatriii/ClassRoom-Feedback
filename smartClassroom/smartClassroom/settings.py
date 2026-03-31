@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     'courses',
     'feedback',
     'analysis',
+    'livefeedback',
 ]
 
 MIDDLEWARE = [

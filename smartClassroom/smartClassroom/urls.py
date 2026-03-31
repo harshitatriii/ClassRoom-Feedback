@@ -7,4 +7,5 @@ urlpatterns = [
     path('api/', include('courses.urls')),
     path('api/', include('feedback.urls')),
     path('api/', include('analysis.urls')),
+    path('api/', include('livefeedback.urls')),
 ]

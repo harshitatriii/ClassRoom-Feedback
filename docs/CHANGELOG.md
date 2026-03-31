@@ -1,5 +1,125 @@
 # Changelog
 
+## V2: Live Questions, Student Attendance, Custom Sessions & Feedback Campaigns
+
+**Date**: March 2026
+**Scope**: Full-stack — 4 new features (see `docs/FEATURES_V2.md` for full details)
+
+### Features Added
+
+1. **Live Questions During Class** — Students can ask text questions (anonymously or not) during live sessions. Other students upvote. Faculty sees questions sorted by votes and marks them answered.
+
+2. **Active/Missing Student List** — Faculty can click "Active Students" in the live dashboard to see who's present, who's missing from the class roster, and flag outsiders not in the roster.
+
+3. **Custom Live Sessions** — Faculty can start live sessions for hackathons, masterclasses, workshops, seminars — not just classes. Subject field is now optional.
+
+4. **Semester-End Feedback Campaigns** — Admins create time-bound feedback campaigns targeting specific programs/semesters. Students see progress banners on their dashboard. Admins track completion rates.
+
+### New Endpoints: 9 | New Models: 3 | New Pages: 1 | Modified Files: ~20
+
+---
+
+## Novelty Features: ABSA, Emotion Detection & Real-Time Live Feedback
+
+**Date**: March 2026
+**Scope**: Full-stack — new NLP features, new Django app, new React pages & chart components
+
+### Summary
+
+Added three research-level features that differentiate this project from typical feedback systems: (1) **Aspect-Based Sentiment Analysis** that breaks down sentiment per aspect, (2) **Emotion Detection** that classifies feedback into 6 emotions beyond positive/negative, and (3) **Real-Time Live Feedback** where students send reactions during class and faculty sees a live dashboard.
+
+### What Changed
+
+#### 1. Aspect-Based Sentiment Analysis (ABSA)
+
+Instead of just overall sentiment, feedback is now analyzed per aspect:
+- **Teaching Quality** — teaching style, explanation clarity, lecture delivery
+- **Content Quality** — syllabus, materials, depth, relevance
+- **Engagement** — interactivity, discussions, participation
+- **Assessment & Fairness** — exams, grading, difficulty
+
+**Example**: "The professor explains well but the exams are too tough"
+→ Teaching Quality: **Positive** (+0.45) | Assessment: **Negative** (-0.30)
+
+**Implementation**: Splits text into sentences using TextBlob, maps each sentence to aspects via keyword dictionaries, computes per-aspect sentiment independently. Results stored in `aspect_sentiments` JSONField on SentimentResult.
+
+#### 2. Emotion Detection
+
+Feedback is classified into 6 emotions with intensity scores (0.0-1.0):
+- Appreciation, Frustration, Confusion, Boredom, Enthusiasm, Satisfaction
+
+**Implementation**: Keyword-based emotion lexicon with partial stem matching (e.g., "frustrat" matches "frustrated", "frustrating"). Lightweight — no GPU/transformer model needed. Results stored in `emotions` JSONField on SentimentResult.
+
+**Frontend**: Recharts radar chart + emoji-based emotion tiles on Course Analytics page.
+
+#### 3. Real-Time Live Feedback During Class
+
+A new system for in-class interaction:
+- Faculty creates a **live session** → gets a unique 6-character code (e.g., "ABC123")
+- Students enter the code to **join the session**
+- Students tap **reaction buttons**: Too Fast, Too Slow, Confused, Got It, Interesting, Boring
+- Faculty sees a **real-time dashboard** with:
+  - Reaction distribution bar chart
+  - Animated progress bars per reaction type
+  - Dominant mood indicator + class pulse health signal
+  - Timeline area chart (30-second buckets)
+  - Recent reaction stream
+- Rate-limited: 1 reaction per 5 seconds per student
+- Dashboard polls every 3 seconds
+
+### New Files Created
+
+**Backend (8 files)**:
+- `livefeedback/__init__.py`, `apps.py`, `models.py` — LiveSession + LivePulse models
+- `livefeedback/views.py` — 7 API views (start, end, active, join, pulse, dashboard, history)
+- `livefeedback/serializers.py`, `urls.py`, `admin.py`
+- `livefeedback/migrations/0001_initial.py`
+
+**Frontend (4 files)**:
+- `src/api/live.js` — Live feedback API client
+- `src/components/charts/AspectSentimentChart.jsx` — ABSA stacked bar chart + polarity cards
+- `src/components/charts/EmotionChart.jsx` — Emotion radar chart + emoji tiles
+- `src/pages/faculty/LiveSession.jsx` — Faculty live dashboard
+- `src/pages/student/LivePulse.jsx` — Student reaction page
+
+### Files Modified
+
+**Backend (5 files)**:
+- `analysis/sentiment.py` — Added `analyze_aspects()`, `detect_emotions()`, `full_analysis()`
+- `analysis/models.py` — Added `aspect_sentiments` and `emotions` JSONFields
+- `analysis/views.py` — Added ABSA/emotion aggregation to SubjectSentimentView and DashboardStatsView
+- `analysis/serializers.py` — Added `dominant_emotion` computed field
+- `feedback/signals.py` — Now calls `full_analysis()` instead of `analyze_sentiment()`
+
+**Frontend (3 files)**:
+- `src/pages/faculty/CourseAnalytics.jsx` — Added ABSA + Emotion chart sections
+- `src/components/layout/Sidebar.jsx` — Added "Live Session" (faculty) and "Live Feedback" (student) nav links
+- `src/App.jsx` — Added routes for `/faculty/live` and `/student/live`
+
+**Config (2 files)**:
+- `smartClassroom/settings.py` — Added `livefeedback` to INSTALLED_APPS
+- `smartClassroom/urls.py` — Added `livefeedback.urls` include
+
+### New API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/live/start/` | POST | Faculty starts a live session |
+| `/api/live/end/<id>/` | POST | Faculty ends a live session |
+| `/api/live/active/` | GET | Get current active session |
+| `/api/live/join/` | POST | Student joins by session code |
+| `/api/live/pulse/` | POST | Student sends a reaction |
+| `/api/live/dashboard/<id>/` | GET | Real-time dashboard data |
+| `/api/live/history/` | GET | Past session history |
+
+### Database Changes
+
+- `analysis_sentimentresult`: Added `aspect_sentiments` (JSON) and `emotions` (JSON) columns
+- New table: `livefeedback_livesession` (faculty, subject, session_code, is_active, timestamps)
+- New table: `livefeedback_livepulse` (session, student, reaction, created_at)
+
+---
+
 ## University Hierarchy Restructuring
 
 **Date**: March 2026

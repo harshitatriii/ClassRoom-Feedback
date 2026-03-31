@@ -18,6 +18,14 @@ class SentimentResult(models.Model):
     sentiment_label = models.CharField(max_length=10, choices=SENTIMENT_CHOICES)
     keywords = models.JSONField(default=list, blank=True)
     category_scores = models.JSONField(default=dict, blank=True)
+    aspect_sentiments = models.JSONField(
+        default=dict, blank=True,
+        help_text='Per-aspect sentiment: {aspect: {polarity, label, phrases}}'
+    )
+    emotions = models.JSONField(
+        default=dict, blank=True,
+        help_text='Emotion scores: {emotion_name: score}'
+    )
     processed_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

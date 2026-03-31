@@ -6,7 +6,7 @@ A file-by-file walkthrough for someone new to this project. You don't need to be
 
 ## How This Project Works (30-Second Version)
 
-This is a **feedback system for a university**. Students submit ratings and written feedback about their subjects. The backend automatically runs sentiment analysis (positive/negative/neutral) on the text. Faculty see analytics about their subjects. Admins manage everything.
+This is a **feedback system for a university**. Students submit ratings and written feedback about their subjects. The backend automatically runs sentiment analysis (positive/negative/neutral), **aspect-based sentiment** (per teaching/content/engagement/assessment), and **emotion detection** (appreciation, frustration, confusion, etc.) on the text. Faculty see rich analytics about their subjects. There's also a **live feedback mode** where students send real-time reactions during class. Admins manage everything.
 
 **Two separate apps talk to each other:**
 
@@ -32,7 +32,7 @@ The frontend sends API requests (`/api/...`), the backend processes them, talks 
 
 ### Part 1: Backend — Django Project Setup
 
-> **What is Django?** A Python web framework. It organizes code into "apps" (folders), each handling a specific feature. The project has 5 apps: `accounts`, `courses`, `feedback`, `analysis`, `core`.
+> **What is Django?** A Python web framework. It organizes code into "apps" (folders), each handling a specific feature. The project has 6 apps: `accounts`, `courses`, `feedback`, `analysis`, `livefeedback`, `core`.
 
 | Order | File | What It Does |
 |-------|------|-------------|
@@ -111,13 +111,17 @@ School  --(has many)-->  Program  --(has many)-->  Subject  --(has many)-->  Fee
 
 | Order | File | What It Does |
 |-------|------|-------------|
-| 23 | `smartClassroom/analysis/sentiment.py` | **The AI engine.** Takes a text string, runs TextBlob on it, returns: polarity (-1 to 1), subjectivity (0 to 1), sentiment label (positive/neutral/negative), keywords (noun phrases), and category scores (how much the text mentions teaching/content/engagement topics). |
-| 24 | `smartClassroom/feedback/signals.py` | **The trigger.** Uses Django's `post_save` signal — every time a Feedback is saved to the database, this automatically calls `analyze_sentiment()` and creates a SentimentResult. No manual step needed. |
+| 23 | `smartClassroom/analysis/sentiment.py` | **The AI engine.** Contains three analysis functions: (1) `analyze_sentiment()` — overall TextBlob polarity/subjectivity/keywords, (2) `analyze_aspects()` — **Aspect-Based Sentiment Analysis** that splits text into sentences, classifies each into aspects (Teaching Quality, Content Quality, Engagement, Assessment & Fairness) via keyword dictionaries, and computes per-aspect sentiment, (3) `detect_emotions()` — keyword-based emotion lexicon detecting 6 emotions (appreciation, frustration, confusion, boredom, enthusiasm, satisfaction) with partial stem matching. All three are combined in `full_analysis()`. |
+| 24 | `smartClassroom/feedback/signals.py` | **The trigger.** Uses Django's `post_save` signal — every time a Feedback is saved to the database, this automatically calls `full_analysis()` and creates a SentimentResult with sentiment + ABSA + emotions. No manual step needed. |
 
 **The flow:**
 ```
 Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
-  -->  analyze_sentiment(text)  -->  SentimentResult created  -->  Available in dashboard
+  -->  full_analysis(text):
+       ├── analyze_sentiment()  -->  polarity, subjectivity, keywords
+       ├── analyze_aspects()    -->  per-aspect sentiment (teaching/content/engagement/assessment)
+       └── detect_emotions()    -->  emotion scores (appreciation/frustration/confusion/...)
+  -->  SentimentResult created  -->  Available in dashboard
 ```
 
 ---
@@ -131,6 +135,29 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | 27 | `smartClassroom/feedback/admin.py` | Registers Feedback in admin, shows student/subject/ratings/sentiment in list view. |
 | 28 | `smartClassroom/analysis/admin.py` | Registers SentimentResult in admin. |
 | 29 | `smartClassroom/seed_data.py` | **Run this to populate sample data.** Creates 2 schools, 3 programs, 3 faculty, 5 students, 1 admin, 5 subjects, 13 feedback entries with auto-generated sentiment. Run with `python seed_data.py`. |
+
+---
+
+### Part 7.5: Backend — Live Feedback (Real-Time During Class)
+
+| Order | File | What It Does |
+|-------|------|-------------|
+| 29.1 | `smartClassroom/livefeedback/models.py` | **Live session & pulse models.** `LiveSession` tracks active class sessions (faculty, subject, 6-char session code, active status, timestamps). `LivePulse` records individual student reactions (too_fast, too_slow, confused, got_it, interesting, boring). |
+| 29.2 | `smartClassroom/livefeedback/views.py` | **7 API views.** `StartSessionView` — faculty starts a session. `EndSessionView` — ends it. `ActiveSessionView` — check for active session. `JoinSessionView` — student enters a session code. `SubmitPulseView` — student sends a reaction (rate-limited to 1 per 5 sec). `SessionDashboardView` — aggregated real-time data (reaction counts, timeline, recent pulses). `SessionHistoryView` — past sessions list. |
+| 29.3 | `smartClassroom/livefeedback/serializers.py` | Serializers for LiveSession (includes faculty name, subject info, pulse count) and LivePulse. |
+| 29.4 | `smartClassroom/livefeedback/urls.py` | Maps `/api/live/start/`, `/api/live/end/<id>/`, `/api/live/active/`, `/api/live/join/`, `/api/live/pulse/`, `/api/live/dashboard/<id>/`, `/api/live/history/`. |
+| 29.5 | `smartClassroom/livefeedback/admin.py` | Registers LiveSession and LivePulse in Django admin. |
+
+**The flow:**
+```
+Faculty starts session  -->  LiveSession created with unique code (e.g., "ABC123")
+  -->  Faculty shares code with class
+  -->  Students enter code to join  -->  JoinSessionView validates code
+  -->  Students tap reaction buttons  -->  LivePulse records created (rate-limited)
+  -->  Faculty dashboard polls /api/live/dashboard/<id>/ every 3 seconds
+  -->  Returns: reaction distribution, timeline (30-sec buckets), recent pulses, student count
+  -->  Faculty ends session  -->  LiveSession.is_active = False
+```
 
 ---
 
@@ -154,8 +181,9 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | 32 | `frontend/src/api/client.js` | **The HTTP client.** Creates an Axios instance with base URL `/api`. Two interceptors: (1) automatically attaches the auth token to every request, (2) redirects to login if a 401 (unauthorized) response comes back. All other API files import this. |
 | 33 | `frontend/src/api/auth.js` | Functions: `registerUser()`, `loginUser()`, `logoutUser()`, `getProfile()`, `updateProfile()`. Each is a one-liner calling the client. |
 | 34 | `frontend/src/api/courses.js` | Functions for schools (`getSchools`, `createSchool`, etc.), programs (`getPrograms`, etc.), and subjects (`getSubjects`, `createSubject`, etc.). |
-| 35 | `frontend/src/api/feedback.js` | `submitFeedback()`, `getFeedbacks()`, `getFeedbackDetail()`, `deleteFeedback()`. |
-| 36 | `frontend/src/api/dashboard.js` | `getDashboardStats()`, `getSubjectAnalytics(id)`, `getSchoolAnalytics(params)`. |
+| 35 | `frontend/src/api/feedback.js` | `submitFeedback()`, `getFeedbacks()`, `getFeedbackDetail()`, `deleteFeedback()`, plus feedback response functions. |
+| 36 | `frontend/src/api/dashboard.js` | `getDashboardStats()`, `getSubjectAnalytics(id)`, `getSchoolAnalytics(params)`, CSV export functions. |
+| 36.1 | `frontend/src/api/live.js` | **Live feedback API.** `startLiveSession()`, `endLiveSession()`, `getActiveSession()`, `joinSession()`, `submitPulse()`, `getSessionDashboard()`, `getSessionHistory()`. |
 
 ---
 
@@ -176,7 +204,7 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | Order | File | What It Does |
 |-------|------|-------------|
 | 42 | `frontend/src/components/layout/AppLayout.jsx` | The page shell — renders Sidebar on the left + TopBar on top + page content in the center. |
-| 43 | `frontend/src/components/layout/Sidebar.jsx` | Navigation menu. Shows different links based on user role (student sees "My Subjects" + "Submit Feedback", faculty sees "My Subjects" + "Analytics", admin sees "Dashboard" + "Manage Subjects"). |
+| 43 | `frontend/src/components/layout/Sidebar.jsx` | Navigation menu. Shows different links based on user role (student sees "My Subjects" + "Submit Feedback" + "Live Feedback", faculty sees "My Subjects" + "Live Session", admin sees "Dashboard" + "Manage Subjects"). |
 | 44 | `frontend/src/components/layout/TopBar.jsx` | Top bar with the app title and logout button. |
 
 ---
@@ -195,12 +223,14 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | 47 | `frontend/src/pages/student/StudentDashboard.jsx` | Shows stat cards (feedback count, subjects, avg rating) and a list of recent feedback. |
 | 48 | `frontend/src/pages/student/FeedbackForm.jsx` | Feedback submission form: select a subject (auto-filtered to student's program + semester), rate 1-5 stars on four categories, write text feedback, toggle anonymous. |
 | 49 | `frontend/src/pages/student/FeedbackHistory.jsx` | Table of all feedback the student has submitted, with sentiment labels shown. |
+| 49.1 | `frontend/src/pages/student/LivePulse.jsx` | **Live feedback page.** Students enter a 6-digit session code to join a live class session. Shows large reaction buttons (Got It, Interesting, Confused, Too Fast, Too Slow, Boring) with a 5-second cooldown animation between reactions. Tracks pulse count. |
 
 #### Faculty Pages
 | Order | File | What It Does |
 |-------|------|-------------|
 | 50 | `frontend/src/pages/faculty/FacultyDashboard.jsx` | Sentiment distribution pie chart across all subjects + list of faculty's subjects with links to detailed analytics. |
-| 51 | `frontend/src/pages/faculty/CourseAnalytics.jsx` | Deep-dive analytics for one subject: sentiment trend over time (line chart), rating breakdown (bar chart), keyword cloud, and individual feedback list. |
+| 51 | `frontend/src/pages/faculty/CourseAnalytics.jsx` | Deep-dive analytics for one subject: sentiment trend (line chart), rating breakdown (bar chart), **aspect-based sentiment** (stacked bar chart + polarity cards), **emotion radar chart** (with emoji tiles), keyword cloud, and individual feedback list. |
+| 51.1 | `frontend/src/pages/faculty/LiveSession.jsx` | **Live session dashboard.** Faculty selects a subject and goes live. Shows a session code to share with students. Real-time dashboard (polls every 3 sec) with: reaction distribution bar chart, animated progress bars per reaction, dominant mood indicator, class pulse health, timeline area chart, and recent reaction stream. |
 
 #### Admin Pages
 | Order | File | What It Does |
@@ -231,6 +261,8 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 | 64 | `frontend/src/components/charts/RatingBarChart.jsx` | Recharts bar chart comparing average ratings across categories. |
 | 65 | `frontend/src/components/charts/TrendLineChart.jsx` | Recharts line chart showing sentiment trend over time. |
 | 66 | `frontend/src/components/charts/KeywordCloud.jsx` | Displays extracted keywords as colored tags. |
+| 67 | `frontend/src/components/charts/AspectSentimentChart.jsx` | **ABSA visualization.** Stacked horizontal bar chart showing positive/neutral/negative counts per aspect (Teaching Quality, Content Quality, Engagement, Assessment). Below: polarity score cards with color-coded values and mention counts. |
+| 68 | `frontend/src/components/charts/EmotionChart.jsx` | **Emotion radar chart.** Recharts radar showing intensity (0-100%) of 6 emotions. Below: emoji-based tiles with scores. Dominant emotion highlighted with cyan border. |
 
 ---
 
@@ -251,9 +283,20 @@ Student submits feedback  -->  Feedback saved to DB  -->  post_save signal fires
 ### How Sentiment Analysis Works
 1. Student submits feedback with text
 2. Django `post_save` signal fires automatically
-3. `analyze_sentiment()` runs TextBlob on the text
-4. Results (polarity, subjectivity, keywords, category scores) are saved as a `SentimentResult`
-5. Dashboards query these results for charts and analytics
+3. `full_analysis()` runs three analyses:
+   - **Overall sentiment**: TextBlob polarity/subjectivity → positive/neutral/negative
+   - **Aspect-Based Sentiment (ABSA)**: Splits text into sentences, maps to aspects (teaching, content, engagement, assessment), computes per-aspect polarity
+   - **Emotion Detection**: Keyword lexicon matches 6 emotions (appreciation, frustration, confusion, boredom, enthusiasm, satisfaction)
+4. All results saved as a `SentimentResult` (polarity, keywords, aspect_sentiments, emotions)
+5. Dashboards query and aggregate these results for charts and analytics
+
+### How Live Feedback Works
+1. Faculty starts a live session → gets a 6-char code (e.g., "ABC123")
+2. Faculty shares the code with the class (show on screen, say aloud)
+3. Students enter the code on the "Live Feedback" page to join
+4. Students tap reaction buttons (Got It, Confused, Too Fast, etc.) — rate-limited to 1 per 5 seconds
+5. Faculty dashboard auto-refreshes every 3 seconds showing real-time reaction distribution, timeline, and mood indicators
+6. Faculty ends the session when class is over
 
 ### The University Hierarchy
 ```
@@ -293,3 +336,40 @@ Open `http://localhost:5173` in your browser.
 - Admin: `admin` / `admin1234`
 - Faculty: `faculty1` / `faculty1234`
 - Student: `student1` / `student1234`
+
+  Seed Data Users (password from seed_data.py)                                                         
+  ┌─────────────┬────────────┬─────────┬───────────────┬─────────┬──────────┐                       
+  │  Username   │  Password  │  Role   │     Name      │ Program │ Semester │                       
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_sharma │ faculty123 │ Faculty │ Rajesh Sharma │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_gupta  │ faculty123 │ Faculty │ Priya Gupta   │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ prof_singh  │ faculty123 │ Faculty │ Amit Singh    │ SOET    │ -        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student1    │ student123 │ Student │ Ankit Kumar   │ BTECH   │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student2    │ student123 │ Student │ Sneha Patel   │ BTECH   │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student3    │ student123 │ Student │ Rahul Verma   │ BTECH   │ 7        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student4    │ student123 │ Student │ Pooja Jain    │ BCA     │ 5        │
+  ├─────────────┼────────────┼─────────┼───────────────┼─────────┼──────────┤
+  │ student5    │ student123 │ Student │ Vikram Reddy  │ BTECH   │ 5        │
+  └─────────────┴────────────┴─────────┴───────────────┴─────────┴──────────┘
+
+  Your Account
+
+  ┌───────────────┬────────────────┬─────────┬─────────┬──────────┐
+  │   Username    │    Password    │  Role   │ Program │ Semester │
+  ├───────────────┼────────────────┼─────────┼─────────┼──────────┤
+  │ harshitatri74 │ (you set this) │ Student │ BTECH   │ 8        │
+  └───────────────┴────────────────┴─────────┴─────────┴──────────┘
+
+  Admin
+
+  ┌──────────┬────────────────────────────────────────┬──────────┐
+  │ Username │                Password                │   Role   │
+  ├──────────┼────────────────────────────────────────┼──────────┤
+  │ admin    │ (whatever you set via createsuperuser) │ Student* │
+  └──────────┴────────────────────────────────────────┴──────────┘

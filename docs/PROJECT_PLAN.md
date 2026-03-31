@@ -29,21 +29,25 @@
 │  └────────────┘ └──────┬──────┘ └────────────────────────────┘ │
 │                        │                                        │
 │              ┌─────────▼─────────┐                              │
-│              │ AI/NLP Engine     │                              │
-│              │ (TextBlob/NLTK)   │                              │
-│              │ - Sentiment Score │                              │
-│              │ - Keyword Extract │                              │
-│              │ - Topic Classify  │                              │
-│              └───────────────────┘                              │
+│              │ AI/NLP Engine     │  ┌─────────────────────────┐  │
+│              │ (TextBlob/NLTK)   │  │ Live Feedback Module    │  │
+│              │ - Sentiment Score │  │ - Session management    │  │
+│              │ - ABSA (Aspect)   │  │ - Real-time reactions   │  │
+│              │ - Emotion Detect  │  │ - Polling dashboard     │  │
+│              │ - Keyword Extract │  │ - Rate limiting         │  │
+│              └───────────────────┘  └─────────────────────────┘  │
 └────────────────────────┬────────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────────┐
 │                    DATABASE (SQLite / PostgreSQL)                │
 │  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌──────────────────┐ │
 │  │ Users    │ │ Feedback  │ │ Schools  │ │ Sentiment        │ │
-│  │  Table   │ │  Table    │ │ Programs │ │ Results Table    │ │
-│  │          │ │           │ │ Subjects │ │                  │ │
+│  │  Table   │ │  Table    │ │ Programs │ │ Results (+ABSA   │ │
+│  │          │ │           │ │ Subjects │ │  +Emotions)      │ │
 │  └──────────┘ └───────────┘ └──────────┘ └──────────────────┘ │
+│  ┌──────────────────────┐ ┌──────────────────────────────────┐ │
+│  │ Live Sessions Table  │ │ Live Pulses Table                │ │
+│  └──────────────────────┘ └──────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,8 +57,9 @@
 |----------------------|------------------------------------------------------------|
 | **Auth Module**      | Registration, login, role-based access (Student/Faculty/Admin) |
 | **Feedback Module**  | Submit, view feedback (structured + free-text)             |
-| **NLP/AI Module**    | Sentiment analysis, keyword extraction, topic classification |
-| **Analytics Module** | Aggregate scores, trend charts, comparative reports         |
+| **NLP/AI Module**    | Sentiment analysis, ABSA (aspect-based), emotion detection, keyword extraction |
+| **Live Feedback**    | Real-time session management, student pulse reactions, live dashboard |
+| **Analytics Module** | Aggregate scores, trend charts, comparative reports, emotion & aspect analytics |
 | **Dashboard Module** | Role-specific views, charts (Recharts), analytics          |
 | **Admin Module**     | User management, school/program/subject CRUD, system config  |
 
@@ -69,6 +74,8 @@ Student submits feedback (React form → POST /api/feedback/)
         ▼
   NLP Engine processes text (post_save signal)
   ├── Sentiment score (positive/neutral/negative + polarity)
+  ├── Aspect-Based Sentiment (per-aspect: teaching/content/engagement/assessment)
+  ├── Emotion detection (appreciation/frustration/confusion/boredom/enthusiasm/satisfaction)
   ├── Keyword extraction (top topics mentioned)
   └── Category tagging (teaching/content/engagement)
         │
@@ -140,11 +147,18 @@ ClassRoom-Feedback/
 │   │   └── admin.py
 │   │
 │   ├── analysis/                    # App: NLP/AI Sentiment Engine
-│   │   ├── sentiment.py            # TextBlob sentiment analysis
-│   │   ├── models.py               # SentimentResult model
+│   │   ├── sentiment.py            # TextBlob: sentiment + ABSA + emotion detection
+│   │   ├── models.py               # SentimentResult model (+aspect_sentiments, +emotions)
 │   │   ├── serializers.py          # SentimentResult serializer
 │   │   ├── views.py                # Analytics API views
 │   │   ├── urls.py
+│   │   └── admin.py
+│   │
+│   ├── livefeedback/                # App: Real-Time Live Feedback
+│   │   ├── models.py               # LiveSession, LivePulse models
+│   │   ├── serializers.py          # Session/Pulse serializers
+│   │   ├── views.py                # Session management + dashboard views
+│   │   ├── urls.py                 # Live feedback API routes
 │   │   └── admin.py
 │   │
 │   └── core/                        # Core app (minimal)
@@ -159,7 +173,8 @@ ClassRoom-Feedback/
 │       │   ├── auth.js
 │       │   ├── courses.js
 │       │   ├── feedback.js
-│       │   └── dashboard.js
+│       │   ├── dashboard.js
+│       │   └── live.js              # Live feedback API calls
 │       ├── context/
 │       │   └── AuthContext.jsx       # Auth state management
 │       ├── hooks/
@@ -167,11 +182,12 @@ ClassRoom-Feedback/
 │       ├── components/
 │       │   ├── layout/              # AppLayout, Sidebar, TopBar
 │       │   ├── ui/                  # ProtectedRoute, RoleRoute, StarRating, StatCard
-│       │   └── charts/             # SentimentPieChart, RatingBarChart, TrendLineChart, KeywordCloud
+│       │   └── charts/             # SentimentPieChart, RatingBarChart, TrendLineChart, KeywordCloud,
+│       │                            # AspectSentimentChart, EmotionChart
 │       └── pages/
 │           ├── auth/                # LoginPage, RegisterPage
-│           ├── student/             # StudentDashboard, FeedbackForm, FeedbackHistory
-│           ├── faculty/             # FacultyDashboard, CourseAnalytics
+│           ├── student/             # StudentDashboard, FeedbackForm, FeedbackHistory, LivePulse
+│           ├── faculty/             # FacultyDashboard, CourseAnalytics, LiveSession
 │           ├── admin/               # AdminDashboard, CourseManagement, CourseForm
 │           └── shared/              # CourseList, CourseDetail, FeedbackDetail, ProfilePage
 │
@@ -250,16 +266,38 @@ ClassRoom-Feedback/
 | *unique_together*| -            | (student, subject)                 |
 
 ### SentimentResult
-| Field           | Type         | Notes                              |
-|-----------------|--------------|------------------------------------|
-| id              | AutoField    | PK                                 |
-| feedback        | OneToOneField| -> Feedback                        |
-| polarity        | FloatField   | -1.0 to 1.0                        |
-| subjectivity    | FloatField   | 0.0 to 1.0                         |
-| sentiment_label | CharField    | positive/neutral/negative           |
-| keywords        | JSONField    | Extracted keywords list             |
-| category_scores | JSONField    | {teaching, content, engagement}     |
-| processed_at    | DateTimeField| Auto                               |
+| Field              | Type         | Notes                              |
+|--------------------|--------------|------------------------------------|
+| id                 | AutoField    | PK                                 |
+| feedback           | OneToOneField| -> Feedback                        |
+| polarity           | FloatField   | -1.0 to 1.0                        |
+| subjectivity       | FloatField   | 0.0 to 1.0                         |
+| sentiment_label    | CharField    | positive/neutral/negative           |
+| keywords           | JSONField    | Extracted keywords list             |
+| category_scores    | JSONField    | {teaching, content, engagement}     |
+| aspect_sentiments  | JSONField    | Per-aspect sentiment: {aspect: {polarity, sentiment, label, phrases}} |
+| emotions           | JSONField    | Emotion scores: {appreciation, frustration, confusion, boredom, enthusiasm, satisfaction} |
+| processed_at       | DateTimeField| Auto                               |
+
+### LiveSession
+| Field         | Type         | Notes                              |
+|---------------|--------------|------------------------------------|
+| id            | AutoField    | PK                                 |
+| faculty       | ForeignKey   | -> CustomUser (faculty)            |
+| subject       | ForeignKey   | -> Subject                         |
+| session_code  | CharField    | Unique 6-char code (e.g., ABC123) |
+| is_active     | BooleanField | Default True                       |
+| started_at    | DateTimeField| Auto                               |
+| ended_at      | DateTimeField| Nullable (set on session end)      |
+
+### LivePulse
+| Field      | Type         | Notes                              |
+|------------|--------------|------------------------------------|
+| id         | AutoField    | PK                                 |
+| session    | ForeignKey   | -> LiveSession                     |
+| student    | ForeignKey   | -> CustomUser (nullable)           |
+| reaction   | CharField    | too_fast/too_slow/confused/got_it/interesting/boring |
+| created_at | DateTimeField| Auto                               |
 
 ---
 
@@ -358,6 +396,22 @@ Tasks:
 
 ---
 
+### PHASE 5.5: Novelty Features — ABSA, Emotion Detection & Live Feedback (Week 10-11) --- COMPLETED
+**Goal**: Add research-level NLP features and real-time classroom interaction
+
+Tasks:
+- [x] **Aspect-Based Sentiment Analysis (ABSA)**: Upgraded the NLP engine to detect sentiment per aspect (Teaching Quality, Content Quality, Engagement, Assessment & Fairness). Splits text into sentences, maps each to aspects via keyword dictionaries, computes per-aspect polarity using TextBlob. Results stored in `aspect_sentiments` JSONField on SentimentResult. Frontend shows stacked horizontal bar chart + polarity score cards on Course Analytics page.
+- [x] **Emotion Detection**: Added keyword-based emotion lexicon covering 6 emotions: appreciation, frustration, confusion, boredom, enthusiasm, satisfaction. Normalized scores (0.0-1.0) stored in `emotions` JSONField on SentimentResult. Frontend displays a Recharts radar chart with emoji-based emotion breakdown tiles.
+- [x] **NLP Pipeline Upgrade**: Combined all analyses into a single `full_analysis()` function called by the `post_save` signal. Runs overall sentiment + ABSA + emotion detection in one pass.
+- [x] **Real-Time Live Feedback**: New `livefeedback` Django app with `LiveSession` and `LivePulse` models. Faculty creates a session with auto-generated 6-char code, students join by entering the code. Students send reactions (Too Fast, Too Slow, Confused, Got It, Interesting, Boring) with 5-second rate limiting. Faculty sees a real-time dashboard (polls every 3 seconds) with reaction distribution bar chart, progress bars, timeline area chart, and recent reactions. Both faculty and students have sidebar navigation links.
+- [x] **7 New API Endpoints**: start/end/active session, join by code, submit pulse, session dashboard, session history.
+- [x] **2 New Chart Components**: `AspectSentimentChart.jsx` (stacked bar + polarity cards), `EmotionChart.jsx` (radar chart + emoji tiles).
+- [x] **Updated Analytics Views**: `SubjectSentimentView` and `DashboardStatsView` now aggregate and return aspect sentiments and emotion data.
+
+**Deliverables**: Research-level NLP (ABSA + emotions), real-time classroom interaction system, 7 new endpoints, 2 new chart types
+
+---
+
 ### PHASE 6: Testing, Deployment & Documentation (Week 11-12)
 **Goal**: Test, deploy, and document
 
@@ -413,9 +467,22 @@ GET    /api/feedback/<id>/              - Feedback detail
 DELETE /api/feedback/<id>/              - Delete feedback (admin only)
 
 # Analytics
-GET    /api/dashboard/stats/            - Role-specific dashboard stats
-GET    /api/analysis/subject/<id>/      - Subject sentiment + ratings + trends
+GET    /api/dashboard/stats/            - Role-specific dashboard stats (+ emotion distribution)
+GET    /api/analysis/subject/<id>/      - Subject sentiment + ABSA + emotions + ratings + trends
 GET    /api/analysis/school/            - School-wide analytics (admin only)
+
+# CSV Exports
+GET    /api/export/feedback/            - Export feedback as CSV (faculty/admin)
+GET    /api/export/subjects/            - Export subject analytics as CSV (faculty/admin)
+
+# Live Feedback (Real-Time During Class)
+POST   /api/live/start/                 - Start a live session (faculty)
+POST   /api/live/end/<id>/              - End a live session (faculty)
+GET    /api/live/active/                - Get current active session (faculty)
+POST   /api/live/join/                  - Join session by code (student)
+POST   /api/live/pulse/                 - Submit a live reaction (student)
+GET    /api/live/dashboard/<id>/        - Real-time dashboard data (faculty)
+GET    /api/live/history/               - Past session history (faculty)
 
 # Django Admin
 GET    /admin/                          - Django admin panel
@@ -440,6 +507,12 @@ GET    /admin/                          - Django admin panel
 7. **Feedback Periods**: Initially open-ended. Phase 5 adds formal feedback windows that admin can open/close per subject.
 
 8. **University Hierarchy**: Data model follows `School → Program → Subject` structure. Students belong to a school + program + current semester and only see subjects matching their program and semester. Faculty belongs to a school and sees only their assigned subjects. Admin sees everything. Registration uses cascading dropdowns (School → Program → Semester).
+
+9. **Aspect-Based Sentiment (ABSA)**: Feedback text is split into sentences, each classified into aspects (teaching quality, content, engagement, assessment) using keyword dictionaries. Per-aspect sentiment computed independently via TextBlob. Stored as JSON in SentimentResult.
+
+10. **Emotion Detection**: Uses a keyword-based emotion lexicon (6 emotions) with partial matching for stemmed words (e.g., "frustrat" matches "frustrated", "frustrating"). Scores normalized to 0.0-1.0 relative to the dominant emotion. Lightweight alternative to transformer models — fast, no GPU required, easy to deploy.
+
+11. **Live Feedback (Polling Architecture)**: Real-time classroom reactions use HTTP polling (3-second intervals) rather than WebSockets. This avoids the need for Django Channels + Redis infrastructure while still providing near-real-time updates. Rate limiting (1 reaction per 5 seconds per student) prevents spam. Session codes are 6-character alphanumeric for easy sharing.
 
 ---
 

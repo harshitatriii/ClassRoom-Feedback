@@ -6,6 +6,8 @@ import SentimentPieChart from '../../components/charts/SentimentPieChart';
 import RatingBarChart from '../../components/charts/RatingBarChart';
 import TrendLineChart from '../../components/charts/TrendLineChart';
 import KeywordCloud from '../../components/charts/KeywordCloud';
+import AspectSentimentChart from '../../components/charts/AspectSentimentChart';
+import EmotionChart from '../../components/charts/EmotionChart';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { Download, MessageCircle, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -81,6 +83,20 @@ export default function CourseAnalytics() {
           <h2 className="text-lg font-semibold text-white mb-4">Rating Breakdown</h2>
           <RatingBarChart data={ratingData} />
         </div>
+      </div>
+
+      {/* NEW: Aspect-Based Sentiment Analysis */}
+      <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-1">Aspect-Based Sentiment</h2>
+        <p className="text-sm text-gray-500 mb-4">Sentiment breakdown by aspect — teaching quality, content, engagement, and assessment fairness</p>
+        <AspectSentimentChart data={data.aspect_sentiments} />
+      </div>
+
+      {/* NEW: Emotion Detection */}
+      <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-1">Emotion Analysis</h2>
+        <p className="text-sm text-gray-500 mb-4">How students feel beyond just positive/negative — detect appreciation, frustration, confusion, and more</p>
+        <EmotionChart data={data.emotion_distribution} />
       </div>
 
       <div className="bg-navy-900 rounded-xl border border-navy-700 p-6">
