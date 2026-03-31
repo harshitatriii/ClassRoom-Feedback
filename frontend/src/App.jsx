@@ -21,6 +21,7 @@ import LiveSessionPage from './pages/faculty/LiveSession';
 import LivePulsePage from './pages/student/LivePulse';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import CourseManagement from './pages/admin/CourseManagement';
+import CampaignManagement from './pages/admin/CampaignManagement';
 
 import CourseList from './pages/shared/CourseList';
 import CourseDetail from './pages/shared/CourseDetail';
@@ -70,6 +71,7 @@ export default function App() {
               <Route element={<RoleRoute roles={['admin']} />}>
                 <Route path="admin/dashboard" element={<AdminDashboard />} />
                 <Route path="admin/subjects" element={<CourseManagement />} />
+                <Route path="admin/campaigns" element={<CampaignManagement />} />
               </Route>
             </Route>
           </Route>

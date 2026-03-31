@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const client = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://smartclassroom-api.onrender.com/api' : '/api'),
   headers: {
     'Content-Type': 'application/json',
   },

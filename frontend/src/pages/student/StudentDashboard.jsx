@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getDashboardStats } from '../../api/dashboard';
-import { getFeedbackList } from '../../api/feedback';
+import { getFeedbackList, getMyCampaignStatus } from '../../api/feedback';
 import { getSubjects } from '../../api/courses';
 import StatCard from '../../components/ui/StatCard';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { MessageSquare, BookOpen, Star, MessageSquarePlus, CheckCircle } from 'lucide-react';
+import { MessageSquare, BookOpen, Star, MessageSquarePlus, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
 
 export default function StudentDashboard() {
   const [stats, setStats] = useState(null);
   const [recentFeedback, setRecentFeedback] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,10 +19,12 @@ export default function StudentDashboard() {
       getDashboardStats(),
       getFeedbackList(),
       getSubjects({ is_active: 'true' }),
-    ]).then(([statsRes, fbRes, subjectsRes]) => {
+      getMyCampaignStatus().catch(() => ({ data: [] })),
+    ]).then(([statsRes, fbRes, subjectsRes, campRes]) => {
       setStats(statsRes.data);
       setRecentFeedback((fbRes.data.results || fbRes.data).slice(0, 5));
       setSubjects(subjectsRes.data.results || subjectsRes.data);
+      setCampaigns(campRes.data || []);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -34,6 +37,75 @@ export default function StudentDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Student Dashboard</h1>
+
+      {/* Active campaign banners */}
+      {campaigns.map(c => (
+        <div key={c.campaign.id}
+          className={`rounded-xl border p-4 ${
+            c.completion_percentage >= 100
+              ? 'bg-emerald-500/10 border-emerald-500/30'
+              : c.campaign.is_mandatory
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-purple-500/10 border-purple-500/30'
+          }`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              {c.completion_percentage >= 100 ? (
+                <CheckCircle className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+              ) : c.campaign.is_mandatory ? (
+                <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+              ) : (
+                <Calendar className="h-5 w-5 text-purple-400 mt-0.5 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  {c.campaign.title}
+                  {c.campaign.is_mandatory && c.completion_percentage < 100 && (
+                    <span className="ml-2 text-xs text-red-400">(Mandatory)</span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {c.completion_percentage >= 100
+                    ? 'All feedback submitted - thank you!'
+                    : `${c.completed_subjects}/${c.total_subjects} subjects completed`
+                  }
+                  {' · '}Ends {new Date(c.campaign.end_date).toLocaleDateString()}
+                </p>
+                {c.completion_percentage < 100 && c.pending_subjects.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {c.pending_subjects.map(s => (
+                      <Link key={s.id} to="/student/feedback/new"
+                        className="px-2 py-0.5 text-xs rounded-full bg-navy-800 border border-navy-600 text-gray-300 hover:border-cyan-500/40 hover:text-cyan-400 transition-all">
+                        {s.code}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="text-right min-w-[4rem]">
+              <p className={`text-lg font-bold ${
+                c.completion_percentage >= 100 ? 'text-emerald-400' : 'text-white'
+              }`}>
+                {c.completion_percentage}%
+              </p>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full bg-navy-800 rounded-full h-1.5 mt-3">
+            <div
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                c.completion_percentage >= 100
+                  ? 'bg-emerald-400'
+                  : c.campaign.is_mandatory
+                  ? 'bg-gradient-to-r from-red-500 to-pink-500'
+                  : 'bg-gradient-to-r from-purple-500 to-indigo-500'
+              }`}
+              style={{ width: `${Math.min(c.completion_percentage, 100)}%` }}
+            ></div>
+          </div>
+        </div>
+      ))}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard icon={BookOpen} label="Available Subjects" value={stats?.subjects_count || 0} color="cyan" />

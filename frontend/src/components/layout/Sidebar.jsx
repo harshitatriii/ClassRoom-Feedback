@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import {
   LayoutDashboard, BookOpen, MessageSquarePlus,
-  History, Settings, GraduationCap, Zap, Radio
+  History, Settings, GraduationCap, Zap, Radio, Calendar
 } from 'lucide-react';
 
 const studentLinks = [
@@ -22,6 +22,7 @@ const facultyLinks = [
 const adminLinks = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/subjects', label: 'Manage Subjects', icon: Settings },
+  { to: '/admin/campaigns', label: 'Campaigns', icon: Calendar },
   { to: '/subjects', label: 'All Subjects', icon: BookOpen },
 ];
 
