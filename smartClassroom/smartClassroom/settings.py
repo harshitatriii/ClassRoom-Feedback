@@ -5,8 +5,12 @@ Django settings for smartClassroom project.
 import os
 from pathlib import Path
 import dj_database_url
+import nltk
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Ensure NLTK can find corpora in project directory
+nltk.data.path.insert(0, str(BASE_DIR / 'nltk_data'))
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-cu36vayh)9ilj35y_zyfpy(_9=qj6*m(4djqmc@)wwl8a*o@c(')
 

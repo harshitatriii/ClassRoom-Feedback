@@ -1,7 +1,11 @@
+import logging
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from .models import Feedback
+
+logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Feedback)
@@ -18,15 +22,18 @@ def trigger_sentiment_analysis(sender, instance, created, **kwargs):
     if SentimentResult.objects.filter(feedback=instance).exists():
         return
 
-    result = full_analysis(instance.text_feedback)
+    try:
+        result = full_analysis(instance.text_feedback)
 
-    SentimentResult.objects.create(
-        feedback=instance,
-        polarity=result['polarity'],
-        subjectivity=result['subjectivity'],
-        sentiment_label=result['sentiment_label'],
-        keywords=result['keywords'],
-        category_scores=result['category_scores'],
-        aspect_sentiments=result['aspect_sentiments'],
-        emotions=result['emotions'],
-    )
+        SentimentResult.objects.create(
+            feedback=instance,
+            polarity=result['polarity'],
+            subjectivity=result['subjectivity'],
+            sentiment_label=result['sentiment_label'],
+            keywords=result['keywords'],
+            category_scores=result['category_scores'],
+            aspect_sentiments=result['aspect_sentiments'],
+            emotions=result['emotions'],
+        )
+    except Exception as e:
+        logger.error(f'Sentiment analysis failed for feedback {instance.id}: {e}')
