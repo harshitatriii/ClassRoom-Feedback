@@ -1,7 +1,6 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { loginUser, logoutUser, getProfile, microsoftLogin } from '../api/auth';
 import { msalInstance, msalReady, loginRequest } from '../msalConfig';
-import toast from 'react-hot-toast';
 
 export const AuthContext = createContext(null);
 
@@ -9,60 +8,23 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
-  const [msRedirectPath, setMsRedirectPath] = useState(null);
 
-  // Handle Microsoft redirect response on page load
   useEffect(() => {
     let cancelled = false;
-
-    async function init() {
-      await msalReady;
-
-      try {
-        const response = await msalInstance.handleRedirectPromise();
-        if (response && response.accessToken && !cancelled) {
-          const res = await microsoftLogin(response.accessToken);
-          const { token: newToken, user: userData, requires_profile } = res.data;
-          localStorage.setItem('token', newToken);
-          if (!cancelled) {
-            setToken(newToken);
-            setUser(userData);
-            setLoading(false);
-            if (requires_profile) {
-              toast.success('Account created! Please complete your profile.');
-              setMsRedirectPath('/profile');
-            } else {
-              toast.success('Welcome back!');
-              setMsRedirectPath('/');
-            }
-          }
-          return;
-        }
-      } catch (err) {
-        console.error('Microsoft redirect error:', err);
-        const msg = err.response?.data?.detail || err.message || 'Microsoft sign-in failed';
-        toast.error(msg);
-      }
-
-      // Normal token-based session restore
-      if (!cancelled) {
-        const savedToken = localStorage.getItem('token');
-        if (savedToken) {
-          try {
-            const res = await getProfile();
-            if (!cancelled) setUser(res.data);
-          } catch {
-            localStorage.removeItem('token');
-            if (!cancelled) setToken(null);
-          }
-        }
-        if (!cancelled) setLoading(false);
-      }
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+      getProfile()
+        .then((res) => { if (!cancelled) setUser(res.data); })
+        .catch(() => {
+          localStorage.removeItem('token');
+          if (!cancelled) setToken(null);
+        })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    } else {
+      setLoading(false);
     }
-
-    init();
     return () => { cancelled = true; };
-  }, []);
+  }, [token]);
 
   const login = useCallback(async (credentials) => {
     const res = await loginUser(credentials);
@@ -75,7 +37,40 @@ export function AuthProvider({ children }) {
 
   const loginWithMicrosoft = useCallback(async () => {
     await msalReady;
-    await msalInstance.loginRedirect(loginRequest);
+
+    // Clear any stuck interaction state
+    const activeAccount = msalInstance.getActiveAccount();
+    if (!activeAccount) {
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+      }
+    }
+
+    let msResult;
+    try {
+      // Try silent token acquisition first (if user previously logged in)
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) {
+        msResult = await msalInstance.acquireTokenSilent({
+          ...loginRequest,
+          account: accounts[0],
+        });
+      }
+    } catch {
+      // Silent failed, will use popup below
+    }
+
+    if (!msResult) {
+      msResult = await msalInstance.loginPopup(loginRequest);
+    }
+
+    const res = await microsoftLogin(msResult.accessToken);
+    const { token: newToken, user: userData, requires_profile } = res.data;
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    setUser(userData);
+    return { user: userData, requires_profile };
   }, []);
 
   const logout = useCallback(async () => {
@@ -86,7 +81,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, loginWithMicrosoft, logout, setUser, msRedirectPath, setMsRedirectPath }}>
+    <AuthContext.Provider value={{ user, token, loading, login, loginWithMicrosoft, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );
