@@ -30,7 +30,15 @@ import ProfilePage from './pages/shared/ProfilePage';
 import NotFound from './pages/shared/NotFound';
 
 function DashboardRedirect() {
-  const { user } = useAuth();
+  const { user, msRedirectPath, setMsRedirectPath } = useAuth();
+
+  // Handle Microsoft login redirect
+  if (msRedirectPath) {
+    const path = msRedirectPath;
+    setMsRedirectPath(null);
+    return <Navigate to={path} replace />;
+  }
+
   if (user?.role === 'student') return <Navigate to="/student/dashboard" replace />;
   if (user?.role === 'faculty') return <Navigate to="/faculty/dashboard" replace />;
   if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />;

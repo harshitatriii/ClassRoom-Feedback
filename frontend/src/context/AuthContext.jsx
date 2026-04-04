@@ -9,25 +9,32 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
+  const [msRedirectPath, setMsRedirectPath] = useState(null);
 
   // Handle Microsoft redirect response on page load
   useEffect(() => {
     let cancelled = false;
-    msalReady.then(async () => {
+
+    async function init() {
+      await msalReady;
+
       try {
         const response = await msalInstance.handleRedirectPromise();
         if (response && response.accessToken && !cancelled) {
           const res = await microsoftLogin(response.accessToken);
           const { token: newToken, user: userData, requires_profile } = res.data;
           localStorage.setItem('token', newToken);
-          setToken(newToken);
-          setUser(userData);
-          if (requires_profile) {
-            toast.success('Account created! Please complete your profile.');
-            window.location.href = '/profile';
-          } else {
-            toast.success('Welcome back!');
-            window.location.href = '/';
+          if (!cancelled) {
+            setToken(newToken);
+            setUser(userData);
+            setLoading(false);
+            if (requires_profile) {
+              toast.success('Account created! Please complete your profile.');
+              setMsRedirectPath('/profile');
+            } else {
+              toast.success('Welcome back!');
+              setMsRedirectPath('/');
+            }
           }
           return;
         }
@@ -39,19 +46,21 @@ export function AuthProvider({ children }) {
 
       // Normal token-based session restore
       if (!cancelled) {
-        if (localStorage.getItem('token')) {
-          getProfile()
-            .then((res) => { if (!cancelled) setUser(res.data); })
-            .catch(() => {
-              localStorage.removeItem('token');
-              if (!cancelled) setToken(null);
-            })
-            .finally(() => { if (!cancelled) setLoading(false); });
-        } else {
-          setLoading(false);
+        const savedToken = localStorage.getItem('token');
+        if (savedToken) {
+          try {
+            const res = await getProfile();
+            if (!cancelled) setUser(res.data);
+          } catch {
+            localStorage.removeItem('token');
+            if (!cancelled) setToken(null);
+          }
         }
+        if (!cancelled) setLoading(false);
       }
-    });
+    }
+
+    init();
     return () => { cancelled = true; };
   }, []);
 
@@ -66,7 +75,6 @@ export function AuthProvider({ children }) {
 
   const loginWithMicrosoft = useCallback(async () => {
     await msalReady;
-    // Redirect to Microsoft login — result handled in useEffect above
     await msalInstance.loginRedirect(loginRequest);
   }, []);
 
@@ -78,7 +86,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, loginWithMicrosoft, logout, setUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, loginWithMicrosoft, logout, setUser, msRedirectPath, setMsRedirectPath }}>
       {children}
     </AuthContext.Provider>
   );
