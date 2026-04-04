@@ -7,6 +7,7 @@ import { Zap } from 'lucide-react';
 export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [msLoading, setMsLoading] = useState(false);
   const { login, loginWithMicrosoft } = useAuth();
   const navigate = useNavigate();
 
@@ -68,7 +69,7 @@ export default function LoginPage() {
           </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || msLoading}
             className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white py-2.5 rounded-lg hover:from-cyan-400 hover:to-blue-400 transition-all disabled:opacity-50 font-semibold shadow-lg shadow-cyan-500/20"
           >
             {loading ? 'Signing in...' : 'Sign In'}
@@ -85,8 +86,25 @@ export default function LoginPage() {
 
           <button
             type="button"
-            disabled={loading}
-            onClick={() => loginWithMicrosoft()}
+            disabled={loading || msLoading}
+            onClick={async () => {
+              setMsLoading(true);
+              try {
+                const result = await loginWithMicrosoft();
+                if (result.requires_profile) {
+                  toast.success('Signed in! Please complete your profile.');
+                  navigate('/profile');
+                } else {
+                  toast.success('Welcome back!');
+                  navigate('/');
+                }
+              } catch (err) {
+                const msg = err.response?.data?.detail || err.message || 'Microsoft sign-in failed';
+                toast.error(msg);
+              } finally {
+                setMsLoading(false);
+              }
+            }}
             className="w-full flex items-center justify-center gap-3 bg-navy-800 border border-navy-600 text-white py-2.5 rounded-lg hover:bg-navy-700 transition-all disabled:opacity-50 font-medium"
           >
             <svg className="w-5 h-5" viewBox="0 0 21 21">
@@ -95,7 +113,7 @@ export default function LoginPage() {
               <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
               <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
             </svg>
-            Sign in with Microsoft
+            {msLoading ? 'Signing in...' : 'Sign in with Microsoft'}
           </button>
 
           <p className="text-center text-sm text-gray-500">
