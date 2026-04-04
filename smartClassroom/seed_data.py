@@ -9,36 +9,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'smartClassroom.settings')
 import django
 django.setup()
 
-from courses.models import School, Program, Subject
-from accounts.models import CustomUser
-from feedback.models import Feedback
-from analysis.models import SentimentResult
-
-# ============================================================
-# CLEANUP OLD DUMMY DATA
-# ============================================================
-print('--- Cleaning old dummy data ---')
-
-# Delete old dummy feedback & sentiment results
-deleted, _ = SentimentResult.objects.all().delete()
-print(f'  Deleted {deleted} sentiment results')
-
-deleted, _ = Feedback.objects.all().delete()
-print(f'  Deleted {deleted} feedbacks')
-
-deleted, _ = Subject.objects.all().delete()
-print(f'  Deleted {deleted} subjects')
-
-# Delete old dummy users (faculty & students, keep superusers)
-deleted, _ = CustomUser.objects.filter(role__in=['faculty', 'student']).delete()
-print(f'  Deleted {deleted} dummy users')
-
-# Delete old dummy programs & schools
-deleted, _ = Program.objects.all().delete()
-print(f'  Deleted {deleted} old programs')
-
-deleted, _ = School.objects.all().delete()
-print(f'  Deleted {deleted} old schools')
+from courses.models import School, Program
 
 # ============================================================
 # SCHOOLS
@@ -180,6 +151,5 @@ for code, name, school_code, semesters in programs_data:
 print(f'\n--- Summary ---')
 print(f'Schools: {School.objects.count()}')
 print(f'Programs: {Program.objects.count()}')
-print(f'Admin users: {CustomUser.objects.filter(is_superuser=True).count()}')
 print('\nDone! All seed data created.')
 print('Note: Add subjects, faculty, and students via the admin panel or register page.')
