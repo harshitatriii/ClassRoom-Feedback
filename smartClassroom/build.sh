@@ -14,4 +14,12 @@ python seed_data.py
 # Create superuser from env vars (skip if already exists)
 if [ -n "$DJANGO_SUPERUSER_USERNAME" ]; then
   python manage.py createsuperuser --no-input || true
+  # Ensure superuser has admin role
+  python -c "
+import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'smartClassroom.settings')
+import django; django.setup()
+from accounts.models import CustomUser
+CustomUser.objects.filter(is_superuser=True).update(role='admin')
+print('Superuser role set to admin')
+"
 fi
