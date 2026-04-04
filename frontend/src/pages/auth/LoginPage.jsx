@@ -7,7 +7,7 @@ import { Zap } from 'lucide-react';
 export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithMicrosoft } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -73,6 +73,31 @@ export default function LoginPage() {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-navy-600" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-navy-900 text-gray-500">or</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => loginWithMicrosoft()}
+            className="w-full flex items-center justify-center gap-3 bg-navy-800 border border-navy-600 text-white py-2.5 rounded-lg hover:bg-navy-700 transition-all disabled:opacity-50 font-medium"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 21 21">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Sign in with Microsoft
+          </button>
+
           <p className="text-center text-sm text-gray-500">
             Don't have an account?{' '}
             <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-medium">Register</Link>
