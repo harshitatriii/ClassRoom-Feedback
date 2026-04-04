@@ -30,9 +30,17 @@ class CustomUser(AbstractUser):
         blank=True,
         help_text='Current semester (for students only)',
     )
-    enrollment_no = models.CharField(max_length=20, blank=True, help_text='For students only')
-    faculty_id = models.CharField(max_length=20, blank=True, help_text='For faculty only')
+    enrollment_no = models.CharField(max_length=20, blank=True, unique=True, null=True, help_text='For students only')
+    faculty_id = models.CharField(max_length=20, blank=True, unique=True, null=True, help_text='For faculty only')
     phone = models.CharField(max_length=15, blank=True)
+
+    def save(self, *args, **kwargs):
+        # Convert blank strings to None for unique nullable fields
+        if not self.enrollment_no:
+            self.enrollment_no = None
+        if not self.faculty_id:
+            self.faculty_id = None
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.get_role_display()})"

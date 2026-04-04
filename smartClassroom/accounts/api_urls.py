@@ -7,4 +7,5 @@ urlpatterns = [
     path('login/', api_views.LoginView.as_view(), name='api-login'),
     path('logout/', api_views.LogoutView.as_view(), name='api-logout'),
     path('profile/', api_views.ProfileView.as_view(), name='api-profile'),
+    path('microsoft/', api_views.MicrosoftLoginView.as_view(), name='api-microsoft-login'),
 ]

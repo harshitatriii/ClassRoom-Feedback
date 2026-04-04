@@ -1,7 +1,11 @@
+import re
+
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 
 from .models import CustomUser
+
+ALLOWED_EMAIL_DOMAINS = ['krmangalam.edu.in', 'krmu.edu.in']
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -20,6 +24,26 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate_role(self, value):
         if value == 'admin':
             raise serializers.ValidationError("Admin accounts cannot be created via registration.")
+        return value
+
+    def validate_email(self, value):
+        domain = value.split('@')[-1].lower()
+        if domain not in ALLOWED_EMAIL_DOMAINS:
+            raise serializers.ValidationError(
+                f"Only university email addresses (@{', @'.join(ALLOWED_EMAIL_DOMAINS)}) are allowed."
+            )
+        if CustomUser.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("An account with this email already exists.")
+        return value.lower()
+
+    def validate_enrollment_no(self, value):
+        if value and CustomUser.objects.filter(enrollment_no=value).exists():
+            raise serializers.ValidationError("This enrollment number is already registered.")
+        return value
+
+    def validate_faculty_id(self, value):
+        if value and CustomUser.objects.filter(faculty_id=value).exists():
+            raise serializers.ValidationError("This faculty ID is already registered.")
         return value
 
     def validate(self, data):
@@ -57,8 +81,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
+        # Blank strings to None for unique nullable fields
+        if not validated_data.get('enrollment_no'):
+            validated_data['enrollment_no'] = None
+        if not validated_data.get('faculty_id'):
+            validated_data['faculty_id'] = None
         user = CustomUser(**validated_data)
         user.set_password(password)
+        # Faculty accounts need admin approval
+        if user.role == 'faculty':
+            user.is_active = False
         user.save()
         return user
 
@@ -70,6 +102,15 @@ class UserLoginSerializer(serializers.Serializer):
     def validate(self, data):
         user = authenticate(username=data['username'], password=data['password'])
         if user is None:
+            # Check if user exists but is inactive (pending approval)
+            try:
+                inactive_user = CustomUser.objects.get(username=data['username'])
+                if not inactive_user.is_active and inactive_user.role == 'faculty':
+                    raise serializers.ValidationError(
+                        "Your faculty account is pending admin approval. Please contact the administrator."
+                    )
+            except CustomUser.DoesNotExist:
+                pass
             raise serializers.ValidationError("Invalid credentials.")
         if not user.is_active:
             raise serializers.ValidationError("Account is disabled.")
@@ -88,7 +129,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'role', 'school', 'school_detail', 'program', 'program_detail',
             'current_semester', 'enrollment_no', 'faculty_id', 'phone',
         )
-        read_only_fields = ('id', 'username', 'role')
+        read_only_fields = ('id', 'username', 'role', 'email')
 
     def get_school_detail(self, obj):
         if obj.school:
