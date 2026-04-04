@@ -17,7 +17,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithMicrosoft } = useAuth();
 
   useEffect(() => {
     getSchools().then(res => setSchools(res.data.results || res.data)).catch(() => {});
@@ -54,6 +54,14 @@ export default function RegisterPage() {
       if (payload.program) payload.program = parseInt(payload.program);
       if (payload.current_semester) payload.current_semester = parseInt(payload.current_semester);
       const res = await registerUser(payload);
+
+      // Faculty accounts need admin approval
+      if (res.data.requires_approval) {
+        toast.success('Account created! Please wait for admin approval before logging in.', { duration: 5000 });
+        navigate('/login');
+        return;
+      }
+
       localStorage.setItem('token', res.data.token);
       await login({ username: form.username, password: form.password });
       toast.success('Account created successfully!');
@@ -114,7 +122,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">Email *</label>
-            <input name="email" type="email" required value={form.email} onChange={handleChange} className={inputClass('email')} placeholder="your@email.com" />
+            <input name="email" type="email" required value={form.email} onChange={handleChange} className={inputClass('email')} placeholder="your.name@krmangalam.edu.in" />
             {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
           </div>
           <div>
@@ -193,6 +201,31 @@ export default function RegisterPage() {
             className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white py-2.5 rounded-lg hover:from-cyan-400 hover:to-blue-400 transition-all disabled:opacity-50 font-semibold shadow-lg shadow-cyan-500/20">
             {loading ? 'Creating Account...' : 'Create Account'}
           </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-navy-600" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-navy-900 text-gray-500">or</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => loginWithMicrosoft()}
+            className="w-full flex items-center justify-center gap-3 bg-navy-800 border border-navy-600 text-white py-2.5 rounded-lg hover:bg-navy-700 transition-all disabled:opacity-50 font-medium"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 21 21">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+            </svg>
+            Sign up with Microsoft
+          </button>
+
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
             <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium">Sign In</Link>

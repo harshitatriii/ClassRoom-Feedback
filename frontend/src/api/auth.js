@@ -14,3 +14,6 @@ export const getProfile = () =>
 
 export const updateProfile = (data) =>
   client.put('/auth/profile/', data);
+
+export const microsoftLogin = (accessToken) =>
+  client.post('/auth/microsoft/', { access_token: accessToken });
