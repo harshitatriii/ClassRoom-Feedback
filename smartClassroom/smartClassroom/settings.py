@@ -10,7 +10,31 @@ import nltk
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Ensure NLTK can find corpora in project directory
-nltk.data.path.insert(0, str(BASE_DIR / 'nltk_data'))
+NLTK_DATA_DIR = str(BASE_DIR / 'nltk_data')
+nltk.data.path.insert(0, NLTK_DATA_DIR)
+os.environ['NLTK_DATA'] = NLTK_DATA_DIR
+
+# Auto-download corpora if missing (handles ephemeral filesystems)
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab', download_dir=NLTK_DATA_DIR, quiet=True)
+try:
+    nltk.data.find('corpora/brown')
+except LookupError:
+    nltk.download('brown', download_dir=NLTK_DATA_DIR, quiet=True)
+try:
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    nltk.download('averaged_perceptron_tagger', download_dir=NLTK_DATA_DIR, quiet=True)
+try:
+    nltk.data.find('corpora/conll2000')
+except LookupError:
+    nltk.download('conll2000', download_dir=NLTK_DATA_DIR, quiet=True)
+try:
+    nltk.data.find('corpora/movie_reviews')
+except LookupError:
+    nltk.download('movie_reviews', download_dir=NLTK_DATA_DIR, quiet=True)
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-cu36vayh)9ilj35y_zyfpy(_9=qj6*m(4djqmc@)wwl8a*o@c(')
 
