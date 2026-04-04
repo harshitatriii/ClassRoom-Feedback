@@ -1,21 +1,10 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Signing in...</title>
-</head>
+<head><title>Authenticating...</title></head>
 <body>
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+  <script src="/msal-redirect-bridge.min.js"></script>
   <script>
-    const msalConfig = {
-      auth: {
-        clientId: "66fc1c80-e950-4d49-8da7-97179199ff84",
-        authority: "https://login.microsoftonline.com/38fd5a4b-955f-455a-9ad2-d2daa5a4e4d0",
-      },
-    };
-    const msalInstance = new msal.PublicClientApplication(msalConfig);
-    msalInstance.initialize().then(() => {
-      msalInstance.handleRedirectPromise().catch(() => {});
-    });
+    msalRedirectBridge.broadcastResponseToMainFrame();
   </script>
 </body>
 </html>
